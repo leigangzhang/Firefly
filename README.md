@@ -1,45 +1,141 @@
 # 萤火虫 FireFly（Jellyfin 插件，MVP）
 
-在 Jellyfin 里发现资源 → 一键交给迅雷下载 → 下载完成后自动按规范命名入库。首发平台：macOS + Jellyfin 10.11（Jellyfin.app）。
+在 Jellyfin 里发现资源 → 一键交给迅雷下载 → 下载完成后自动按规范命名入库。
 
-设计依据：项目文件《萤火虫FireFly初步设计.md》《萤火虫FireFly方案-v5.md》。
+- 首发平台：**macOS + Jellyfin 10.11（Jellyfin.app）+ 迅雷 Mac 版**
+- 设计依据：项目文件《萤火虫FireFly初步设计.md》《萤火虫FireFly方案-v5.md》
 
-## 目录
+## 目录结构
 
 ```
-src/FireFly.Core/        业务核心（不引用 Jellyfin）：搜索源、标题解析、迅雷驱动、下载监控、归档、授权与额度
-src/FireFly.Jellyfin/    Jellyfin 插件：网页注入、/FireFly/* 接口、后台监控、配置页、前端
+src/FireFly.Core/           业务核心（不引用 Jellyfin）：搜索源、标题解析、迅雷驱动、下载监控、归档、授权与额度
+src/FireFly.Jellyfin/       Jellyfin 插件：网页注入、/FireFly/* 接口、后台监控、配置页、前端
 tools/FireFly.LicenseTool/  生成密钥对、签发授权码（只在作者电脑上用）
 tests/FireFly.Core.Tests/   Core 单元测试
+build.sh                    构建并打包 → out/FireFly_<版本>.zip
+make-repo.sh                生成 Jellyfin 插件库（manifest.json + zip）
+install-local.sh            不经插件库，直接装进本机 Jellyfin（开发自测用）
 ```
 
-## 构建与本机安装
+---
 
-需要 .NET 9 SDK：`brew install dotnet@9`。
+## macOS 安装部署
+
+### 1. 准备环境
+
+| 组件 | 要求 | 安装方式 |
+|---|---|---|
+| macOS | Intel 或 Apple 芯片均可 | — |
+| Jellyfin | 10.11.x，以 **Jellyfin.app** 形式安装（不支持 Docker 版） | https://jellyfin.org/downloads/macos |
+| 迅雷 Mac 版 | 最新版，已登录 | 迅雷官网 |
+| .NET 9 SDK | 仅构建时需要，用户安装插件时不需要 | `brew install dotnet@9` |
+| Python 3 | 仅"本机插件库"方式需要，用来临时起一个 HTTP 服务。macOS 自带的 `/usr/bin/python3` 即可 | `xcode-select --install` |
+
+Homebrew 安装的 `dotnet@9` 不会自动加入 PATH，需要在 `~/.zshrc` 里加上下面两行，然后重新打开终端：
 
 ```bash
-dotnet test tests/FireFly.Core.Tests -f net9.0        # 单元测试
-./make-repo.sh http://127.0.0.1:8765                  # 构建并生成本机插件库
-cd out/repo && python3 -m http.server 8765            # 临时开一个本机插件库
+export DOTNET_ROOT="$(brew --prefix dotnet@9)/libexec"
+export PATH="$(brew --prefix dotnet@9)/bin:$PATH"
 ```
 
-然后在 Jellyfin：控制台 → 插件 → 存储库 → 添加 `http://127.0.0.1:8765/manifest.json` → 目录里找到 **FireFly** → 安装 → 重启 Jellyfin。
+检查：`dotnet --list-sdks` 输出里应该有 `9.0.x`。
 
-## 首次配置
+### 2. 构建与测试
 
-1. **迅雷**：设置 → 下载目录设为 `~/Downloads/FireFly`（或你在插件里填的目录），关闭"新建任务时弹出确认"之类的选项；确认迅雷是磁力链接的默认打开方式。
-2. **插件配置页**（控制台 → 插件 → FireFly）：顶部状态会显示下载目录、电影库、剧集库是否就绪，以及是否在同一块磁盘。按需填写 TMDb API Key。
-3. 打开任意电影或剧集详情页，点云朵图标 **获取资源**；或点顶栏火焰图标 **发现** 看本周热门。
+```bash
+cd ~/Workspace/FireFly
+dotnet test tests/FireFly.Core.Tests -f net9.0     # 单元测试，应全部通过
+./build.sh                                         # 生成 out/FireFly_<版本>.zip
+```
 
-## 三项假设（M1 / M2 / M3）的验证方法
+### 3. 安装插件（任选一种）
 
-| 项 | 怎么看是否通过 | 不通过时改哪里 |
+**方式 A：通过插件库安装（推荐，与正式发布的流程一致）**
+
+```bash
+./make-repo.sh http://127.0.0.1:8765               # 生成 out/repo/manifest.json 和插件包
+cd out/repo && python3 -m http.server 8765         # 保持这个终端开着
+```
+
+1. 打开 Jellyfin 网页 → 控制台 → 插件 → **存储库** → 点"+"添加：
+   - 名称：`FireFly（本机）`
+   - 地址：`http://127.0.0.1:8765/manifest.json`
+2. 回到插件 → **目录**，找到 **FireFly** → 安装。
+3. 按提示重启 Jellyfin：在菜单栏的 Jellyfin 图标里退出，再重新打开 Jellyfin.app。
+4. 装好之后可以关掉 `http.server` 那个终端。以后升级时再打开即可。
+
+**方式 B：直接复制进插件目录（开发时改完代码快速自测）**
+
+```bash
+./install-local.sh
+```
+
+这个脚本会：构建 → 退出 Jellyfin → 删除旧的 `FireFly_*` 目录 → 把 DLL 复制到 `~/Library/Application Support/jellyfin/plugins/FireFly_<版本>/` → 重新打开 Jellyfin。
+
+> 必须先退出 Jellyfin 再覆盖 DLL，否则运行中的进程可能读到半写的文件，报 `BadImageFormatException`。
+
+### 4. 设置迅雷（M1）
+
+1. 迅雷 → 设置 → **下载目录**：改为 `~/Downloads/FireFly`（先在访达里新建这个文件夹），或者改成你在插件配置里填的目录。
+2. 关闭"新建任务时弹出确认 / 选择下载位置"之类的选项（以你的迅雷版本里的实际名称为准）。
+3. 确认迅雷是磁力链接的默认打开方式：在终端执行 `open "magnet:?xt=urn:btih:0000000000000000000000000000000000000000"`，看是否由迅雷接管（这个测试任务可以直接删除）。
+
+### 5. 配置插件
+
+控制台 → 插件 → **FireFly**：
+
+| 配置项 | 说明 |
+|---|---|
+| 迅雷下载目录 | 留空为 `~/Downloads/FireFly`，需要与第 4 步迅雷里设置的目录一致 |
+| 电影库目录 / 剧集库目录 | 留空时自动使用 Jellyfin 第一个"电影"/"节目"媒体库。最好与下载目录在同一块磁盘，入库时就是瞬间完成的移动；不在同一块磁盘时会变成复制 |
+| TMDb API Key | 用于"发现"热门榜单，在 themoviedb.org 账号设置 → API 里免费申请 |
+| 发布者关键词 | 留空使用内置默认（DDHDTV、高清剧集网），一行一个词 |
+| 授权码 | VIP 授权码，以 `FF1.` 开头；不填则每月免费 5 部 |
+
+页面顶部的状态区会显示：版本、授权、下载目录是否存在、媒体库路径、是否在同一块磁盘、数据目录。全部正常后再开始使用。
+
+### 6. 使用
+
+1. 浏览器按 `Cmd+Shift+R` 强制刷新 Jellyfin 网页（首次安装后需要刷新一次，才能加载注入的脚本）。
+2. 打开任意电影 / 剧集详情页 → 点云朵图标 **获取资源** → 剧集先选季 → 在版本列表里点 **下载**。
+3. 或点顶栏的火焰图标 **发现** → 本周热门电影 / 剧集 → 点海报进入同样的版本列表。
+4. 点面板右上角的 **下载任务** 查看进度。下载完成后状态会变为"已入库"，媒体库会自动刷新。
+
+> 入口只对 Jellyfin 管理员账号显示。
+
+### 7. 升级
+
+1. 修改 `Directory.Build.props` 里的 `<Version>`（例如 `0.1.0.1`）；
+2. 方式 A：重新执行 `./make-repo.sh http://127.0.0.1:8765` 并启动 `http.server`，Jellyfin 的插件页面会提示有更新；方式 B：重新执行 `./install-local.sh`。
+
+### 8. 卸载
+
+控制台 → 插件 → FireFly → 卸载 → 重启 Jellyfin。下载任务和额度记录保存在配置页显示的"数据目录"里，需要彻底清除时手动删除该目录即可。
+
+### 9. 常见问题
+
+| 现象 | 排查 |
+|---|---|
+| 详情页没有"获取资源"按钮 | 按 `Cmd+Shift+R` 强制刷新；确认当前账号是管理员；在 `~/Library/Application Support/jellyfin/log/` 最新的日志里搜索 `FireFly`，确认插件已加载 |
+| 点"下载"后报"无法把磁力交给迅雷" | 迅雷没有安装，或者不是磁力链接的默认打开方式，见第 4 步第 3 项 |
+| 任务一直是"等待迅雷开始"，10 分钟后变成"停滞" | 迅雷可能弹出了确认窗口，或者下载目录与插件配置不一致（**M1 不通过**，见下一节） |
+| 迅雷在下载，但进度一直是 0 或者下完了不入库 | 迅雷的临时文件命名与规则不符（**M2 不通过**），见下一节 |
+| 状态显示"归档失败" | 媒体库目录不存在或没有写入权限；在配置页检查电影库 / 剧集库路径 |
+| "发现"页提示填写 TMDb Key | 在配置页填写 TMDb API Key 并保存 |
+
+---
+
+## 三项假设（M1 / M2 / M3）的验证与回退
+
+| 项 | 怎么判断通过 | 不通过时改哪里 |
 |---|---|---|
-| M1 不改迅雷配置也能自动开始下载 | 点"下载"后，迅雷不弹窗就自动开始，文件出现在下载目录 | `MacThunderDownloader.SubmitAsync`：提交前加 `defaults write com.xunlei.Thunder specifySavePath/LastSavePath` |
-| M2 只看文件系统就能判断进度和完成 | 任务列表里的进度会增长，下载完成后状态自动变为"已入库" | `rules.default.json` 的 `thunder.tempSuffixes` 改成实测的临时后缀；仍不行就在 `MacThunderDownloader.Probe` 里只读查询 `etm_map.db` |
-| M3 插件库不放 GitHub | 用 `./make-repo.sh https://你的地址` 生成文件并上传，在 Jellyfin 里添加存储库并安装成功 | 先改用 GitHub Releases |
+| M1 不改迅雷配置也能自动开始下载 | 点"下载"后，迅雷不弹窗就自动开始，文件出现在下载目录 | `MacThunderDownloader.SubmitAsync`：提交前执行 `defaults write com.xunlei.Thunder specifySavePath/LastSavePath`（老项目的做法） |
+| M2 只看文件系统就能判断进度和完成 | 任务列表里的进度在增长，下载完成后状态自动变为"已入库" | 先把 `src/FireFly.Core/Rules/rules.default.json` 里的 `thunder.tempSuffixes` 改成实测的临时后缀；仍然不行，就在 `MacThunderDownloader.Probe` 里改为只读查询 `etm_map.db` |
+| M3 插件库不放 GitHub | 执行 `./make-repo.sh https://你的地址`，把 `out/repo` 里的文件上传到该地址，在 Jellyfin 里添加存储库并安装成功 | 先改用 GitHub Releases |
 
-M2 实测时可以在下载过程中执行 `ls -laR ~/Downloads/FireFly`，记录迅雷临时文件的命名方式。
+M2 实测方法：下载过程中执行 `ls -laR ~/Downloads/FireFly`，记录迅雷临时文件的命名方式，以及下载完成那一刻文件名发生了什么变化。
+
+---
 
 ## 授权码
 
@@ -47,14 +143,15 @@ M2 实测时可以在下载过程中执行 `ls -laR ~/Downloads/FireFly`，记�
 cd tools/FireFly.LicenseTool
 dotnet run -f net9.0 -- keygen                       # 生成 keys/private.key（保密，已在 .gitignore 中）并打印公钥
 dotnet run -f net9.0 -- issue 买家标识 yearly         # 签发授权码：monthly / yearly / lifetime
+dotnet run -f net9.0 -- verify <授权码> <公钥>         # 验证
 ```
 
-把公钥填进 `src/FireFly.Jellyfin/FireFlyRuntime.cs` 的 `LicensePublicKey` 后再发版。公钥为空时，插件只提供每月免费额度（`FreeMonthlyQuota`，当前为 5 部）。
+把公钥填进 `src/FireFly.Jellyfin/FireFlyRuntime.cs` 的 `LicensePublicKey` 后再发版。公钥为空时，插件只提供每月免费额度（`FreeMonthlyQuota`，当前为 5 部）。**私钥一旦丢失或更换，已经卖出的授权码会全部失效，请备份。**
 
 ## 运行数据
 
-插件数据目录（`~/Library/Application Support/jellyfin/plugins/configurations/FireFly/` 一带，以 Jellyfin 实际路径为准）里有：
+插件配置页的"数据目录"一栏显示实际路径，其中：
 
 - `tasks.json`：下载任务；
 - `quota.json`：月度额度；
-- `rules.json`（可选）：覆盖内置规则，版本号不低于内置时生效。
+- `rules.json`（可选）：覆盖内置规则，版本号不低于内置版本时生效。

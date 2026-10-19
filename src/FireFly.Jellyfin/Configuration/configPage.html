@@ -56,7 +56,8 @@
             line('下载目录', s.downloadDir + (s.downloadDirExists ? '' : '（不存在，请创建并在迅雷里设置）'), s.downloadDirExists) +
             line('电影库', (s.movieRoot || '未找到') + (s.sameVolumeMovie === false ? '（与下载目录不在同一磁盘，入库会变成复制）' : ''), !!s.movieRoot) +
             line('剧集库', (s.seriesRoot || '未找到') + (s.sameVolumeSeries === false ? '（与下载目录不在同一磁盘，入库会变成复制）' : ''), !!s.seriesRoot) +
-            line('TMDb', s.tmdbConfigured ? '已配置' : '未配置', s.tmdbConfigured);
+            line('TMDb', s.tmdbConfigured ? '已配置' : '未配置', s.tmdbConfigured) +
+            line('数据目录', s.dataDir);
         });
       }
 

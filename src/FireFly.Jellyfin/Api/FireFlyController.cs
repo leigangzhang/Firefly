@@ -67,6 +67,7 @@ public sealed class FireFlyController : ControllerBase
             tmdbConfigured = _runtime.Tmdb.Configured,
             keywords = _runtime.Keywords(),
             rulesVersion = _runtime.Rules.Version,
+            dataDir = _runtime.DataDir,
             libraries = (_runtime.Host as JellyfinMediaHost)?.AllLocations().Select(l => new { l.Library, l.Type, l.Path }),
         });
     }
