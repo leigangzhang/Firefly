@@ -1,0 +1,27 @@
+.ff-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center}
+.ff-panel{background:#181a1f;color:#e8e8e8;width:min(960px,94vw);max-height:86vh;border-radius:10px;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.ff-head{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #2c2f36}
+.ff-title{flex:1;font-size:1.1em;font-weight:600}
+.ff-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #2c2f36}
+.ff-bar>span{flex:1}
+.ff-body{overflow:auto;padding:8px 16px 16px}
+.ff-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #24272d}
+.ff-main{flex:1;min-width:0}
+.ff-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ff-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:.85em}
+.ff-chip{background:#2a2e36;border-radius:4px;padding:1px 6px}
+.ff-dim{color:#9aa0a6}
+.ff-btn{background:#f5b301;color:#111;border:0;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:600;white-space:nowrap}
+.ff-btn:disabled{opacity:.6;cursor:default}
+.ff-ghost{background:transparent;color:#e8e8e8;border:1px solid #3a3e46;font-weight:400}
+.ff-select{background:#24272d;color:#e8e8e8;border:1px solid #3a3e46;border-radius:6px;padding:4px 8px}
+.ff-msg{padding:16px 0;color:#c8c8c8}
+.ff-error{color:#ff8a80}
+.ff-progress{height:6px;background:#2a2e36;border-radius:3px;margin-top:6px;overflow:hidden}
+.ff-progress-bar{height:100%;background:#f5b301}
+.ff-stalled .ff-progress-bar{background:#ff9800}.ff-failed .ff-progress-bar{background:#f44336}.ff-done .ff-progress-bar{background:#4caf50}
+.ff-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:14px;padding-top:8px}
+.ff-card{cursor:pointer;position:relative}
+.ff-card img,.ff-noposter{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:6px;background:#2a2e36}
+.ff-card-title{font-size:.85em;margin-top:4px}
+.ff-in{position:absolute;top:6px;left:6px;background:#4caf50;color:#fff}

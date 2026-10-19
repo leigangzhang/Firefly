@@ -1,0 +1,127 @@
+using System.Text.Json.Serialization;
+
+namespace FireFly.Core.Models;
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum MediaKind
+{
+    Movie,
+    Series,
+}
+
+/// <summary>要找的东西：一部电影，或一部剧的某一季。</summary>
+public sealed record MediaQuery
+{
+    public MediaKind Kind { get; init; }
+
+    public string Title { get; init; } = string.Empty;
+
+    public string? OriginalTitle { get; init; }
+
+    public int? Year { get; init; }
+
+    /// <summary>剧集的季号；电影为空。</summary>
+    public int? Season { get; init; }
+
+    public string? TmdbId { get; init; }
+
+    /// <summary>额度计数用的键：同一部片 / 同一季在一个月内只算一次。</summary>
+    public string QuotaKey =>
+        Kind == MediaKind.Movie
+            ? $"movie:{TmdbId ?? Title}:{Year}"
+            : $"series:{TmdbId ?? Title}:{Year}:s{Season ?? 1}";
+}
+
+public sealed record ReleaseFile(string Path, long Size);
+
+/// <summary>一个可下载的版本（一条磁力）。</summary>
+public sealed record Release
+{
+    public string InfoHash { get; init; } = string.Empty;
+
+    public string Name { get; init; } = string.Empty;
+
+    public string Magnet { get; init; } = string.Empty;
+
+    public long SizeBytes { get; init; }
+
+    public IReadOnlyList<ReleaseFile> Files { get; init; } = Array.Empty<ReleaseFile>();
+
+    public DateTimeOffset? CreatedAt { get; init; }
+
+    public string Source { get; init; } = string.Empty;
+
+    public ReleaseTraits Traits { get; init; } = new();
+}
+
+/// <summary>从标题里解析出的展示字段。只用于展示、过滤和排序，不打分。</summary>
+public sealed record ReleaseTraits
+{
+    /// <summary>纵向像素：2160 / 1080 / 720 / 480；未识别为 0。</summary>
+    public int Resolution { get; init; }
+
+    public string? Codec { get; init; }
+
+    public string? Hdr { get; init; }
+
+    public string? MediaSource { get; init; }
+
+    public string? Audio { get; init; }
+
+    public string? Subtitles { get; init; }
+
+    public int? Year { get; init; }
+
+    /// <summary>标题里标明的季号；没有标明为空。</summary>
+    public int? Season { get; init; }
+
+    public string? Publisher { get; init; }
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum TaskState
+{
+    Submitted,
+    Downloading,
+    Stalled,
+    Archiving,
+    Done,
+    Failed,
+}
+
+public sealed class DownloadTask
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+    public MediaQuery Query { get; set; } = new();
+
+    public Release Release { get; set; } = new();
+
+    public TaskState State { get; set; } = TaskState.Submitted;
+
+    public DateTimeOffset SubmittedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public long BytesDone { get; set; }
+
+    public long BytesTotal { get; set; }
+
+    public double SpeedBps { get; set; }
+
+    public DateTimeOffset? LastProgressAt { get; set; }
+
+    /// <summary>连续"已完成且大小不变"的检查次数，达到阈值才进入归档。</summary>
+    public int StableChecks { get; set; }
+
+    public List<string> ArchivedPaths { get; set; } = new();
+
+    public string? Message { get; set; }
+
+    [JsonIgnore]
+    public bool IsActive => State is TaskState.Submitted or TaskState.Downloading or TaskState.Stalled or TaskState.Archiving;
+}
+
+public sealed record DownloadProgress(long BytesDone, long BytesTotal, bool Complete, IReadOnlyList<string> CompletedFiles);
+
+public sealed record LibraryPaths(string? MovieRoot, string? SeriesRoot);

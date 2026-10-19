@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <AssemblyName>FireFly.Jellyfin</AssemblyName>
+    <RootNamespace>FireFly.Jellyfin</RootNamespace>
+    <!-- 插件目录里要带上 FireFly.Core.dll；Jellyfin 自己的程序集不复制 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <PathMap>$(MSBuildProjectDirectory)=/src/FireFly.Jellyfin</PathMap>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.11">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Jellyfin.Model" Version="10.11.11">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../FireFly.Core/FireFly.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Web/firefly.js" LogicalName="FireFly.Jellyfin.Web.firefly.js" />
+    <EmbeddedResource Include="Web/firefly.css" LogicalName="FireFly.Jellyfin.Web.firefly.css" />
+    <EmbeddedResource Include="Configuration/configPage.html" LogicalName="FireFly.Jellyfin.Configuration.configPage.html" />
+  </ItemGroup>
+</Project>

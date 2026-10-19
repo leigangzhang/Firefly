@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-19",
+  "sources": [
+    {
+      "name": "diao.im",
+      "kind": "diao",
+      "endpoints": ["https://m.diao.im/api/search"],
+      "pageSize": 10,
+      "maxPages": 3,
+      "enabled": true
+    }
+  ],
+  "publisherKeywords": ["DDHDTV", "高清剧集网"],
+  "thunder": {
+    "tempSuffixes": [".xltd", ".td", ".td.cfg", ".bt.xltd"]
+  },
+  "videoExtensions": [".mkv", ".mp4", ".ts", ".m2ts", ".avi", ".mov", ".wmv", ".iso", ".rmvb", ".flv", ".webm"],
+  "subtitleExtensions": [".srt", ".ass", ".ssa", ".sup", ".vtt"],
+  "minVideoBytes": 52428800
+}
