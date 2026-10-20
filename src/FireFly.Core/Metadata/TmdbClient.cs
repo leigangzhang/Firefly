@@ -19,6 +19,9 @@ public sealed record TmdbItem(
     int? SeasonCount,
     IReadOnlyList<int>? GenreIds = null);
 
+/// <summary>SeasonEpisodes：剧集各季的集数（季号 → 集数），电影为空。</summary>
+public sealed record TmdbNames(string? OriginalTitle, IReadOnlyList<string> AlternateTitles, IReadOnlyDictionary<int, int>? SeasonEpisodes = null);
+
 public sealed record TmdbPageResult(int Page, int TotalPages, int TotalResults, IReadOnlyList<TmdbItem> Items);
 
 /// <summary>导演 / 编剧 / 主创 / 演员。Role 是职务或饰演的角色，Episodes 只有剧集演员有。</summary>
@@ -122,6 +125,24 @@ public sealed class TmdbClient
     /// <summary>按片名搜电影和剧集（TMDb /search/multi，丢掉人物结果）。</summary>
     public async Task<TmdbPageResult> SearchAsync(string query, int page, CancellationToken ct)
     {
+        var result = await SearchSingleAsync(query, page, ct).ConfigureAwait(false);
+        var variant = page == 1 && result.TotalResults < 5 ? QueryVariant(query) : null;
+        if (variant is null || string.Equals(variant, query.Trim(), StringComparison.Ordinal))
+        {
+            return result;
+        }
+
+        // TMDb 不做中文近音纠错；原查询结果少时补一次常见错字变体，再合并去重。
+        var corrected = await SearchSingleAsync(variant, 1, ct).ConfigureAwait(false);
+        var merged = corrected.Items.Concat(result.Items)
+            .GroupBy(i => (i.Kind, i.TmdbId))
+            .Select(g => g.First())
+            .ToList();
+        return new TmdbPageResult(1, 1, merged.Count, merged);
+    }
+
+    private async Task<TmdbPageResult> SearchSingleAsync(string query, int page, CancellationToken ct)
+    {
         var result = await GetAsync<TmdbPage>(
             "/search/multi",
             new Dictionary<string, string>
@@ -135,6 +156,26 @@ public sealed class TmdbClient
         return ToSearchPage(result);
     }
 
+    /// <summary>常见中文片名错字/近音字；只用于补搜，不替换用户原始查询。</summary>
+    internal static string? QueryVariant(string query)
+    {
+        var text = query.Trim();
+        foreach (var (from, to) in ChineseTitleVariants)
+        {
+            if (text.Contains(from, StringComparison.Ordinal))
+            {
+                return text.Replace(from, to, StringComparison.Ordinal);
+            }
+        }
+
+        return null;
+    }
+
+    private static readonly (string From, string To)[] ChineseTitleVariants =
+    {
+        ("权利", "权力"),
+    };
+
     internal static TmdbPageResult ToSearchPage(TmdbPage? page) => new(
         page?.Page ?? 1,
         Math.Min(page?.TotalPages ?? 1, 500),
@@ -143,6 +184,43 @@ public sealed class TmdbClient
             .Where(r => r.MediaType is "movie" or "tv")
             .Select(r => r.ToItem(r.MediaType == "tv" ? MediaKind.Series : MediaKind.Movie))
             .ToList());
+
+    /// <summary>
+    /// 资源搜索用的译名：原名 + 中港台新的别名（alternative_titles）。
+    /// 资源站常用和 TMDb 主标题不同的译名，只靠主标题会搜不到。
+    /// </summary>
+    public async Task<TmdbNames> NamesAsync(MediaKind kind, string tmdbId, CancellationToken ct)
+    {
+        var seg = Segment(kind);
+        var id = Uri.EscapeDataString(tmdbId);
+        var detail = await GetJsonAsync($"/{seg}/{id}", new Dictionary<string, string> { ["append_to_response"] = "alternative_titles" }, DetailTtl, ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(detail);
+        return ParseNames(kind, doc.RootElement);
+    }
+
+    private static readonly string[] ChineseRegions = { "CN", "TW", "HK", "SG" };
+
+    internal static TmdbNames ParseNames(MediaKind kind, JsonElement r)
+    {
+        var original = Str(r, kind == MediaKind.Movie ? "original_title" : "original_name");
+        var alt = r.TryGetProperty("alternative_titles", out var a) ? a : default;
+        var list = Arr(alt, kind == MediaKind.Movie ? "titles" : "results")
+            .Where(t => Str(t, "iso_3166_1") is { } c && ChineseRegions.Contains(c))
+            .OrderBy(t => Array.IndexOf(ChineseRegions, Str(t, "iso_3166_1")))
+            .Select(t => Str(t, "title"))
+            .OfType<string>()
+            .Select(t => t.Trim())
+            .Where(t => t.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(4)
+            .ToList();
+        var seasons = Arr(r, "seasons")
+            .Select(x => (No: Int(x, "season_number"), Count: Int(x, "episode_count")))
+            .Where(x => x.No is not null && x.Count is > 0)
+            .GroupBy(x => x.No!.Value)
+            .ToDictionary(g => g.Key, g => g.First().Count!.Value);
+        return new TmdbNames(original, list, seasons);
+    }
 
     public async Task<TmdbItem?> DetailAsync(MediaKind kind, string tmdbId, CancellationToken ct)
     {

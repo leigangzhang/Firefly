@@ -18,12 +18,21 @@ public sealed record MediaQuery
 
     public string? OriginalTitle { get; init; }
 
+    /// <summary>
+    /// 别名（TMDb 的中港台译名等）。资源站常用和 TMDb 主标题不同的译名，
+    /// 例如 TMDb"权力的游戏前传：龙族"，资源站叫"龙之家族"或原名"House of the Dragon"。
+    /// </summary>
+    public IReadOnlyList<string> AlternateTitles { get; init; } = Array.Empty<string>();
+
     public int? Year { get; init; }
 
     /// <summary>剧集的季号；电影为空。</summary>
     public int? Season { get; init; }
 
     public string? TmdbId { get; init; }
+
+    /// <summary>该季在 TMDb 上的集数，用来区分"整季包"和名字只写了季号的分集包；未知为空。</summary>
+    public int? SeasonEpisodes { get; init; }
 
     /// <summary>额度计数用的键：同一部片 / 同一季在一个月内只算一次。</summary>
     public string QuotaKey =>
@@ -79,6 +88,9 @@ public sealed record ReleaseTraits
     public int? Season { get; init; }
 
     public string? Publisher { get; init; }
+
+    /// <summary>只有俄语、乌克兰语、西语等外语音轨或字幕、没有中英文的版本，排序时靠后。</summary>
+    public bool ForeignOnly { get; init; }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

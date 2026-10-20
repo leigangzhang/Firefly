@@ -9,13 +9,13 @@
         "https://m.diao.im/api/search"
       ],
       "pageSize": 10,
-      "maxPages": 3,
+      "maxPages": 5,
       "enabled": true
     }
   ],
   "publisherKeywords": [
-    "DDHDTV",
-    "高清剧集网"
+    "高清剧集网",
+    "高清影视之家"
   ],
   "thunder": {
     "tempSuffixes": [

@@ -11,7 +11,8 @@ public interface IResourceSource
 {
     string Name { get; }
 
-    Task<IReadOnlyList<Release>> SearchAsync(string keyword, CancellationToken ct);
+    /// <summary>maxPages 为空时用规则里的页数上限；降级搜索结果多、只取前几页。</summary>
+    Task<IReadOnlyList<Release>> SearchAsync(string keyword, CancellationToken ct, int? maxPages = null);
 }
 
 public static class SourceFactory
@@ -47,11 +48,12 @@ public sealed class DiaoSource : IResourceSource
 
     public string Name => _rule.Name;
 
-    public async Task<IReadOnlyList<Release>> SearchAsync(string keyword, CancellationToken ct)
+    public async Task<IReadOnlyList<Release>> SearchAsync(string keyword, CancellationToken ct, int? maxPages = null)
     {
         var results = new List<Release>();
         var limit = Math.Clamp(_rule.PageSize, 1, 10);
-        for (var page = 0; page < Math.Max(1, _rule.MaxPages); page++)
+        var pages = Math.Max(1, Math.Min(_rule.MaxPages, maxPages ?? _rule.MaxPages));
+        for (var page = 0; page < pages; page++)
         {
             var payload = await FetchAsync(keyword, limit, page * limit, ct).ConfigureAwait(false);
             if (payload?.Data?.Torrents is not { Count: > 0 } torrents)

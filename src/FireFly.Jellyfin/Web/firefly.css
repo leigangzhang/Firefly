@@ -121,9 +121,11 @@
 @keyframes ff-fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .ff-seasonbar{display:flex;flex-wrap:wrap;gap:4px;margin:0 -4px 8px}
 .ff-seasonbar:empty{display:none}
-.ff-rtools{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.ff-quota{flex:1;display:flex;align-items:center;gap:10px;font-size:.88em;color:#c9ccd1}
-.ff-meter{width:96px;height:6px;border-radius:3px;background:#2a2e36;overflow:hidden}
+.ff-dquota{display:flex;align-items:center;margin-left:auto;padding-bottom:2px;flex:0 0 auto}
+.ff-dquota:empty{display:none}
+.ff-quota-short{display:none}
+.ff-quota{display:flex;white-space:nowrap;align-items:center;gap:8px;font-size:.82em;color:#c9ccd1}
+.ff-meter{width:56px;height:6px;border-radius:3px;background:#2a2e36;overflow:hidden}
 .ff-meter-bar{height:100%;background:#f5b301;border-radius:3px;transition:width .4s ease}
 .ff-meter-bar.ff-full{background:#ff5a5a}
 .ff-gold{color:#f5b301;font-size:20px}
@@ -177,7 +179,7 @@
 .ff-toast-err .material-icons{color:#ff5a5a}
 .ff-toast-btn{background:none;border:0;color:#f5b301;font-weight:600;cursor:pointer;padding:4px 6px}
 @media (prefers-reduced-motion:reduce){.ff-drawer,.ff-backdrop,.ff-toast,.ff-progress-bar{transition:none}.ff-view-anim,.ff-rcard,.ff-tcard{animation:none}}
-@media (max-width:640px){.ff-dhead{padding:16px 14px 10px 16px}.ff-dbody{padding:10px 12px 24px}.ff-tabs{padding:0 12px}.ff-rcard{flex-direction:column;align-items:stretch}.ff-dl-btn{width:100%}}
+@media (max-width:640px){.ff-dhead{padding:16px 14px 10px 16px}.ff-quota-label{display:none}.ff-quota-short{display:inline}.ff-meter{width:40px}.ff-quota{gap:6px}.ff-dbody{padding:10px 12px 24px}.ff-tabs{padding:0 12px}.ff-rcard{flex-direction:column;align-items:stretch}.ff-dl-btn{width:100%}}
 .ff-toast-drawer{left:auto;right:calc(min(600px,100vw) / 2);transform:translate(50%,16px)}
 .ff-toast-drawer.ff-show{transform:translate(50%,0)}
 /* 榜单页右上角搜索 */
@@ -195,3 +197,33 @@
 .ff-search-head .ff-dim{font-size:.8em;font-weight:400;flex:1}
 .ff-search-head .ff-btn{font-size:.82em}
 @media (max-width:860px){.ff-search,.ff-search:focus-within{width:auto;flex:1}.ff-page-head .ff-title{display:none}}
+/* 剧集版本：整季 / 单集分栏与选集 */
+.ff-seasonrow{display:flex;align-items:flex-start;gap:12px;margin-bottom:8px}
+.ff-seasonrow .ff-seasonbar{flex:1;min-width:0;margin-bottom:0}
+.ff-packslot:empty{display:none}
+.ff-pselect{position:relative;flex:0 0 auto}
+.ff-pbtn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 6px 0 12px;background:#1b1d22;border:1px solid #2a2e36;border-radius:8px;color:#e8e8e8;font-size:.9em;cursor:pointer;transition:border-color .15s}
+.ff-pbtn:hover,.ff-pselect.ff-open .ff-pbtn{border-color:#f5b301}
+.ff-pcaret{font-size:18px;color:#8a9099;transition:transform .2s}
+.ff-pselect.ff-open .ff-pcaret{transform:rotate(180deg)}
+.ff-pmenu{position:absolute;right:0;top:calc(100% + 6px);min-width:96px;padding:4px;background:#1f2228;border:1px solid #2e323a;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.45);z-index:5;opacity:0;transform:translateY(-4px);pointer-events:none;transition:opacity .15s,transform .15s}
+.ff-pselect.ff-open .ff-pmenu{opacity:1;transform:none;pointer-events:auto}
+.ff-popt{display:flex;width:100%;align-items:center;gap:16px;background:transparent;border:0;color:#c9ccd1;padding:8px 12px;border-radius:7px;font-size:.9em;cursor:pointer;text-align:left}
+.ff-popt:hover:not(:disabled){background:#2a2e36;color:#fff}
+.ff-popt.ff-on{color:#f5b301;font-weight:600}
+.ff-popt:disabled{opacity:.35;cursor:default}
+.ff-epgroup{color:#8a9099;font-size:.8em;letter-spacing:.04em;margin:10px 2px -2px}
+.ff-epgroup:first-child{margin-top:0}
+.ff-dbody.ff-has-rail{padding-right:40px}
+.ff-rail{position:absolute;right:4px;top:150px;bottom:24px;display:flex;align-items:center;z-index:4;pointer-events:none}
+.ff-rail-marks{display:flex;flex-direction:column;align-items:stretch;max-height:100%;overflow-y:auto;scrollbar-width:none;padding:4px;border:1px solid transparent;border-radius:10px;pointer-events:auto;transition:background .15s,border-color .15s,box-shadow .15s}
+.ff-rail-marks::-webkit-scrollbar{display:none}
+.ff-rail-marks:hover{background:#1f2228;border-color:#2e323a;box-shadow:-8px 0 24px rgba(0,0,0,.35)}
+.ff-rail-mark{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:0 0 auto;height:18px;padding:0 4px 0 0;background:transparent;border:0;border-radius:5px;color:#9aa0a6;font-size:12px;line-height:18px;cursor:pointer;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ff-rail-label{max-width:0;opacity:0;overflow:hidden;transition:opacity .12s}
+.ff-rail-marks:hover .ff-rail-label{max-width:80px;opacity:1;padding-left:6px}
+.ff-rail-mark:hover{color:#fff;background:#2a2e36}
+.ff-rail-mark.ff-on{color:#f5b301;font-weight:600}
+.ff-rail-dash{flex:0 0 auto;width:12px;height:3px;border-radius:2px;background:#3d424b;transition:background .15s,width .15s}
+.ff-rail-mark.ff-on .ff-rail-dash{width:18px;background:#f5b301}
+.ff-rail-mark:not(.ff-on) .ff-rail-dash{margin-left:6px}

@@ -1,14 +1,30 @@
 using System.Collections.Concurrent;
+using System.Text.Json.Serialization;
 using FireFly.Core.Models;
+using FireFly.Core.Parsing;
 using FireFly.Core.Rules;
 
 namespace FireFly.Core.Sources;
 
-public sealed record SearchResult(MediaQuery Query, IReadOnlyList<Release> Releases, IReadOnlyList<string> Queries, IReadOnlyList<string> Errors, bool FromCache);
+/// <summary>NeedsFallback：只做了优选阶段、还应再做降级搜索（前端据此异步追加）。</summary>
+public sealed record SearchResult(MediaQuery Query, IReadOnlyList<Release> Releases, IReadOnlyList<string> Queries, IReadOnlyList<string> Errors, bool FromCache, bool NeedsFallback = false);
 
 /// <summary>
-/// 一次搜索，两级查询：先"片名 + 发布者关键词"，没结果再"只用片名"。
-/// 不打分：过滤掉明显不是这部片的，剩下的按 发布者命中 → 分辨率 → 发布时间 排序，交给用户选。
+/// Preferred：只搜带发布者关键词的优选资源，先返回给用户；
+/// Fallback：在优选结果上追加不带关键词的降级结果；Full：两步一起做完再返回。
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SearchStage
+{
+    Full,
+    Preferred,
+    Fallback,
+}
+
+/// <summary>
+/// 一次搜索分两个阶段：先"片名 + 发布者关键词"（主标题、原名、别名依次尝试；剧集再带季号），
+/// 某类结果不足 5 条时再降级为只用片名 / 片名 + 季号，结果追加进来。
+/// 不打分：过滤掉明显不是这部片的，剩下的按 发布者命中 → 画质降级 → 分辨率 → 发布时间 排序，交给用户选。
 /// </summary>
 public sealed class SearchService
 {
@@ -35,66 +51,216 @@ public sealed class SearchService
             .SelectMany(c => c.Result.Releases)
             .FirstOrDefault(r => string.Equals(r.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
 
-    public async Task<SearchResult> SearchAsync(MediaQuery query, bool refresh, CancellationToken ct)
+    public Task<SearchResult> SearchAsync(MediaQuery query, bool refresh, CancellationToken ct) =>
+        SearchAsync(query, refresh, SearchStage.Full, ct);
+
+    public async Task<SearchResult> SearchAsync(MediaQuery query, bool refresh, SearchStage stage, CancellationToken ct)
     {
-        var cacheKey = query.QuotaKey;
-        if (!refresh && _cache.TryGetValue(cacheKey, out var hit) && DateTimeOffset.UtcNow - hit.At < CacheTtl)
+        var fullKey = query.QuotaKey + "|full";
+        var preferredKey = query.QuotaKey + "|preferred";
+        if (!refresh && Cached(fullKey) is { } full)
         {
-            return hit.Result with { FromCache = true };
+            return full with { FromCache = true, NeedsFallback = false };
         }
 
-        var keywords = _keywords();
-        var titles = new[] { query.Title, query.OriginalTitle }
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .Select(t => t!.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var queries = new List<string>();
-        var errors = new List<string>();
-
-        // 第一级：主标题 + 每个发布者关键词（一行一个词，多词会变成"全部命中"）
-        var tier1 = keywords.Select(k => $"{query.Title} {k}").ToList();
-        var found = await RunAsync(tier1, queries, errors, ct).ConfigureAwait(false);
-        var filtered = Filter(found, query);
-
-        // 第二级：只用片名（中文名、原名）
-        if (filtered.Count == 0)
+        if (stage == SearchStage.Preferred && !refresh && Cached(preferredKey) is { } preferredHit)
         {
-            found = await RunAsync(titles, queries, errors, ct).ConfigureAwait(false);
-            filtered = Filter(found, query);
+            return preferredHit with { FromCache = true };
         }
 
-        var ordered = Order(filtered, keywords);
-        var result = new SearchResult(query, ordered, queries, errors, false);
-        if (errors.Count == 0 || ordered.Count > 0)
+        // 降级阶段紧跟在优选阶段之后请求：直接接着刚才的优选结果做，不重搜（即使是"刷新"）
+        var preferred = stage == SearchStage.Fallback && Cached(preferredKey) is { } p
+            ? p
+            : await PreferredAsync(query, ct).ConfigureAwait(false);
+        if (stage == SearchStage.Preferred)
         {
-            _cache[cacheKey] = (DateTimeOffset.UtcNow, result);
+            Store(preferredKey, preferred);
+            return preferred;
         }
 
+        var result = preferred.NeedsFallback ? await FallbackAsync(query, preferred, ct).ConfigureAwait(false) : preferred;
+        result = result with { NeedsFallback = false, FromCache = false };
+        Store(fullKey, result);
         return result;
     }
 
-    private async Task<List<Release>> RunAsync(IEnumerable<string> keywords, List<string> queries, List<string> errors, CancellationToken ct)
+    private SearchResult? Cached(string key) =>
+        _cache.TryGetValue(key, out var hit) && DateTimeOffset.UtcNow - hit.At < CacheTtl ? hit.Result : null;
+
+    private void Store(string key, SearchResult result)
     {
-        var all = new List<Release>();
-        foreach (var keyword in keywords)
+        if (result.Errors.Count == 0 || result.Releases.Count > 0)
         {
-            queries.Add(keyword);
-            foreach (var source in _sources())
+            _cache[key] = (DateTimeOffset.UtcNow, result);
+        }
+    }
+
+    /// <summary>
+    /// 优选阶段：片名 + 发布者关键词。资源站的译名常和 TMDb 主标题不同，主标题搜不到时依次换原名、别名，命中一个就停。
+    /// 剧集同时带季号搜（"第一季"和"S01"两种写法）：只用片名搜时上游按时间倒序，新一季的单集会把这一季挤出结果页。
+    /// </summary>
+    private async Task<SearchResult> PreferredAsync(MediaQuery query, CancellationToken ct)
+    {
+        var keywords = _keywords();
+        var queries = new List<string>();
+        var errors = new List<string>();
+        var filtered = new List<Release>();
+        foreach (var title in SearchTitles(query))
+        {
+            var batch = query.Kind == MediaKind.Series
+                ? keywords.SelectMany(k => SeasonForms(query).Select(f => $"{title}{f} {k}"))
+                : keywords.Select(k => $"{title} {k}");
+            filtered = Merge(filtered, Filter(await RunAsync(batch, queries, errors, ct).ConfigureAwait(false), query));
+            if (filtered.Count > 0)
             {
-                try
-                {
-                    all.AddRange(await source.SearchAsync(keyword, ct).ConfigureAwait(false));
-                }
-                catch (SourceException ex)
-                {
-                    errors.Add(ex.Message);
-                }
+                break;
+            }
+        }
+
+        var needsFallback = query.Kind == MediaKind.Series
+            ? NeedsSeriesFallback(filtered, _rules(), query.SeasonEpisodes)
+            : filtered.Count < MinResultsPerPackType;
+        return new SearchResult(query, Order(filtered, keywords), queries, errors, false, needsFallback);
+    }
+
+    /// <summary>
+    /// 降级阶段：不带发布者关键词，剧集按季号搜（补出单集 / 分集包），电影只用片名；结果追加到优选结果后面。
+    /// 排序时优选资源仍在前面，所以降级只会增加可选项，不会把优选挤下去。
+    /// </summary>
+    private async Task<SearchResult> FallbackAsync(MediaQuery query, SearchResult preferred, CancellationToken ct)
+    {
+        var titles = SearchTitles(query);
+        var queries = preferred.Queries.ToList();
+        var errors = preferred.Errors.ToList();
+        var batch = query.Kind == MediaKind.Series
+            ? titles.SelectMany(t => SeasonForms(query).Where(f => f.Length > 0).Select(f => t + f))
+            : titles;
+        var filtered = Merge(preferred.Releases, Filter(await RunAsync(batch, queries, errors, ct, FallbackPages).ConfigureAwait(false), query));
+
+        // 剧集带季号也搜不到时，最后只用片名搜一次
+        if (filtered.Count == 0 && query.Kind == MediaKind.Series)
+        {
+            filtered = Filter(await RunAsync(titles, queries, errors, ct, FallbackPages).ConfigureAwait(false), query);
+        }
+
+        return new SearchResult(query, Order(filtered, _keywords()), queries, errors, false);
+    }
+
+    /// <summary>剧集搜索词里的季号写法：""（不带季号）、" 第一季"、" S01"。资源站认"第一季"，不认"第1季"。</summary>
+    private static IEnumerable<string> SeasonForms(MediaQuery query)
+    {
+        var season = query.Season ?? 1;
+        return new[] { string.Empty, $" 第{ChineseNumeral(season)}季", $" S{season:00}" };
+    }
+
+    /// <summary>1 → 一，10 → 十，12 → 十二，20 → 二十。</summary>
+    internal static string ChineseNumeral(int n)
+    {
+        const string digits = "零一二三四五六七八九";
+        if (n is < 1 or > 99)
+        {
+            return n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        if (n < 10)
+        {
+            return digits[n].ToString();
+        }
+
+        var tens = n / 10 == 1 ? string.Empty : digits[n / 10].ToString();
+        return tens + "十" + (n % 10 == 0 ? string.Empty : digits[n % 10].ToString());
+    }
+
+    /// <summary>
+    /// 搜索用的片名：主标题、原名、别名，冒号换成空格后去重，最多 4 个。
+    /// 资源站按标点分词：带冒号（"Avatar: Seven Havens"）或直接删掉冒号（"降世神通七净土"）都常搜出 0 条，换成空格最稳。
+    /// </summary>
+    internal static List<string> SearchTitles(MediaQuery query) =>
+        new[] { query.Title, query.OriginalTitle }
+            .Concat(query.AlternateTitles)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => ColonToSpace(t!))
+            .Where(t => t.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(4)
+            .ToList();
+
+    private static string ColonToSpace(string title) =>
+        string.Join(' ', title.Replace('：', ' ').Replace(':', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>排序降级：0 正常；1 只有外语音轨 / 字幕；2 枪版。</summary>
+    public static int Demotion(Release r) =>
+        r.Traits.MediaSource == ReleaseParser.CamSource ? 2 : r.Traits.ForeignOnly ? 1 : 0;
+
+    private const int MinResultsPerPackType = 5;
+
+    private static bool NeedsSeriesFallback(IReadOnlyCollection<Release> releases, RulesDocument rules, int? seasonEpisodes)
+    {
+        var counts = releases
+            .GroupBy(r => PackType(r, rules, seasonEpisodes))
+            .ToDictionary(g => g.Key, g => g.Count());
+        return counts.GetValueOrDefault("full") < MinResultsPerPackType
+            || counts.GetValueOrDefault("multi") < MinResultsPerPackType
+            || counts.GetValueOrDefault("single") < MinResultsPerPackType;
+    }
+
+    private static string PackType(Release release, RulesDocument rules, int? seasonEpisodes)
+    {
+        var coverage = ReleaseDisplay.Coverage(release, rules, seasonEpisodes);
+        return coverage.FullSeason ? "full" : coverage.Episodes.Count > 1 ? "multi" : "single";
+    }
+
+    private static List<Release> Merge(IEnumerable<Release> current, IEnumerable<Release> more) =>
+        current.Concat(more)
+            .GroupBy(r => r.InfoHash, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+
+    /// <summary>同一级的搜索词并发请求（最多 MaxParallelRequests 个），结果按搜索词顺序拼接，保证排序稳定。</summary>
+    private async Task<List<Release>> RunAsync(IEnumerable<string> keywords, List<string> queries, List<string> errors, CancellationToken ct, int? maxPages = null)
+    {
+        var list = keywords.ToList();
+        queries.AddRange(list);
+        var sources = _sources();
+        using var gate = new SemaphoreSlim(MaxParallelRequests);
+        var tasks = list
+            .SelectMany(keyword => sources.Select(source => SearchOneAsync(source, keyword, maxPages, gate, ct)))
+            .ToList();
+        var outcomes = await Task.WhenAll(tasks).ConfigureAwait(false);
+
+        var all = new List<Release>();
+        foreach (var (releases, error) in outcomes)
+        {
+            all.AddRange(releases);
+            if (error is not null)
+            {
+                errors.Add(error);
             }
         }
 
         return all;
+    }
+
+    private const int MaxParallelRequests = 6;
+
+    /// <summary>降级搜索不带发布者关键词，结果多且杂，只取前 3 页（30 条）。</summary>
+    private const int FallbackPages = 3;
+
+    private static async Task<(IReadOnlyList<Release> Releases, string? Error)> SearchOneAsync(IResourceSource source, string keyword, int? maxPages, SemaphoreSlim gate, CancellationToken ct)
+    {
+        await gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return (await source.SearchAsync(keyword, ct, maxPages).ConfigureAwait(false), null);
+        }
+        catch (SourceException ex)
+        {
+            return (Array.Empty<Release>(), ex.Message);
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     internal List<Release> Filter(IEnumerable<Release> releases, MediaQuery query)
@@ -129,11 +295,12 @@ public sealed class SearchService
                     continue;
                 }
 
-                // MVP 只做整季：单集种子（只有一个视频文件）不列
-                if (r.Files.Count > 0 && r.Files.Count(f => rules.IsVideo(f.Path) && f.Size >= rules.MinVideoBytes) < 2)
-                {
-                    continue;
-                }
+                // 单集、分集包也保留，由前端按"整季 / 单集"分开展示
+            }
+
+            if (ReleaseParser.IsAdult(r.Name))
+            {
+                continue;
             }
 
             if (!NameMentions(r.Name, query))
@@ -147,21 +314,69 @@ public sealed class SearchService
         return list;
     }
 
-    /// <summary>标题里至少出现中文名或原名之一（去掉空白和标点后比较），挡掉搜索站的模糊匹配噪音。</summary>
+    /// <summary>
+    /// 标题里至少出现主标题、原名或别名之一，挡掉搜索站的模糊匹配噪音。
+    /// 比较前把标点换成空格；片名前紧挨着同类文字（"海洋奥德赛"、"TheOdyssey"）、
+    /// 英文片名后紧挨着字母（"Belowground"）都不算命中，避免短片名误配别的片。
+    /// </summary>
     internal static bool NameMentions(string name, MediaQuery query)
     {
         var haystack = Normalize(name);
-        return new[] { query.Title, query.OriginalTitle }
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .Any(t => haystack.Contains(Normalize(t!), StringComparison.OrdinalIgnoreCase));
+        return SearchTitles(query)
+            .Select(Normalize)
+            .Where(t => t.Length > 0)
+            .Any(t => ContainsWord(haystack, t));
     }
 
-    private static string Normalize(string s) =>
-        new(s.Where(c => char.IsLetterOrDigit(c)).ToArray());
+    private static bool ContainsWord(string haystack, string title)
+    {
+        for (var i = haystack.IndexOf(title, StringComparison.OrdinalIgnoreCase); i >= 0; i = haystack.IndexOf(title, i + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            var end = i + title.Length;
+            var before = i > 0 && SameClass(haystack[i - 1], title[0]);
+            var after = end < haystack.Length && !IsCjk(title[^1]) && SameClass(haystack[end], title[^1]);
+            if (!before && !after)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool SameClass(char a, char b) =>
+        a != ' ' && b != ' ' && (char.IsDigit(a) ? char.IsDigit(b) : !char.IsDigit(b) && IsCjk(a) == IsCjk(b));
+
+    private static bool IsCjk(char c) => char.IsLetter(c) && c > '\u024F';
+
+    /// <summary>标点、空白统一成单个空格；中日韩文字之间的空格去掉（"降世神通.七净土" 与 "降世神通：七净土" 相同）。</summary>
+    private static string Normalize(string s)
+    {
+        var sb = new System.Text.StringBuilder(s.Length);
+        foreach (var c in s)
+        {
+            if (char.IsLetterOrDigit(c))
+            {
+                if (sb.Length >= 2 && sb[^1] == ' ' && IsCjk(c) && IsCjk(sb[^2]))
+                {
+                    sb.Length--;
+                }
+
+                sb.Append(c);
+            }
+            else if (sb.Length > 0 && sb[^1] != ' ')
+            {
+                sb.Append(' ');
+            }
+        }
+
+        return sb.ToString().Trim();
+    }
 
     internal static List<Release> Order(IEnumerable<Release> releases, IReadOnlyList<string> keywords) =>
         releases
             .OrderByDescending(r => keywords.Any(k => r.Name.Contains(k, StringComparison.OrdinalIgnoreCase)))
+            .ThenBy(Demotion)
             .ThenByDescending(r => r.Traits.Resolution)
             .ThenByDescending(r => r.CreatedAt ?? DateTimeOffset.MinValue)
             .ToList();

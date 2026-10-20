@@ -21,11 +21,15 @@
     return node;
   }
 
-  function api(method, path, body) {
+  function api(method, path, body, options) {
     var client = window.ApiClient;
     var headers = { 'Authorization': 'MediaBrowser Token="' + client.accessToken() + '"' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    return fetch(client.getUrl('FireFly/' + path), { method: method, headers: headers, body: body === undefined ? undefined : JSON.stringify(body) })
+    options = options || {};
+    return fetch(client.getUrl('FireFly/' + path), {
+      method: method, headers: headers, signal: options.signal,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
       .then(function (res) {
         return res.text().then(function (text) {
           var data = text ? JSON.parse(text) : null;
@@ -51,10 +55,13 @@
     var body = el('div', { class: 'ff-dbody' });
     var title = el('div', { class: 'ff-dtitle' });
     var sub = el('div', { class: 'ff-dsub' });
+    var quota = el('div', { class: 'ff-dquota' });
+    var refresh = el('button', { class: 'ff-icon-btn', title: '重新搜索', 'aria-label': '重新搜索', style: 'display:none', onclick: function () { if (drawer && drawer.view === 'search') runSearch(true); } }, [icon('refresh')]);
     var backdrop = el('div', { class: 'ff-backdrop', onclick: closeDrawer });
     var panel = el('aside', { class: 'ff-drawer', role: 'dialog', 'aria-modal': 'true' }, [
       el('div', { class: 'ff-dhead' }, [
         el('div', { class: 'ff-dheading' }, [sub, title]),
+        refresh,
         el('button', { class: 'ff-icon-btn', title: '关闭（Esc）', 'aria-label': '关闭', onclick: closeDrawer }, [icon('close')]),
       ]),
       tabs,
@@ -62,7 +69,7 @@
     ]);
     var root = el('div', { class: 'ff-drawer-root' }, [backdrop, panel]);
     document.body.appendChild(root);
-    drawer = { root: root, panel: panel, tabs: tabs, body: body, title: title, sub: sub, view: null, search: null, cache: {} };
+    drawer = { root: root, panel: panel, tabs: tabs, body: body, title: title, sub: sub, quota: quota, refresh: refresh, view: null, search: null, cache: {} };
     document.addEventListener('keydown', onDrawerKey, true);
     requestAnimationFrame(function () { requestAnimationFrame(function () { root.classList.add('ff-open'); }); });
     return drawer;
@@ -71,6 +78,7 @@
   function closeDrawer() {
     if (!drawer) return;
     stopPoll();
+    if (drawer.search && drawer.search.searchController) drawer.search.searchController.abort();
     var root = drawer.root;
     drawer = null;
     document.removeEventListener('keydown', onDrawerKey, true);
@@ -98,6 +106,8 @@
         onclick: function () { if (d.view !== t.key) (t.key === 'tasks' ? showTasks : showSearchView)(); },
       }, [t.label, t.key === 'tasks' ? el('span', { class: 'ff-tab-count', 'data-count': '' }) : null]));
     });
+    // 额度靠右放在标签行里，切到下载任务也一直可见
+    d.tabs.appendChild(d.quota);
     refreshTaskCount();
   }
 
@@ -108,6 +118,8 @@
     d.view = view;
     d.title.textContent = title;
     d.sub.textContent = sub;
+    d.refresh.style.display = view === 'search' ? '' : 'none';
+    removeRail();
     renderTabs();
     var content = el('div', { class: 'ff-view-anim' });
     d.body.innerHTML = '';
@@ -168,10 +180,12 @@
     var s = drawer.search;
     var content = switchView('search', s.label, '获取资源');
     var seasonBar = el('div', { class: 'ff-seasonbar' });
+    var packSlot = el('div', { class: 'ff-packslot' });
     var list = el('div', { class: 'ff-rlist' });
-    content.appendChild(seasonBar);
+    content.appendChild(el('div', { class: 'ff-seasonrow' }, [seasonBar, packSlot]));
     content.appendChild(list);
     s.list = list;
+    s.packSlot = packSlot;
     if (s.request.kind === 'Series') {
       var q = s.request.itemId ? 'seasons?itemId=' + s.request.itemId : 'seasons?tmdbId=' + (s.request.tmdbId || '');
       var ready = s.seasons ? Promise.resolve({ seasons: s.seasons }) : api('GET', q);
@@ -196,7 +210,7 @@
     s.seasons.forEach(function (n) {
       bar.appendChild(el('button', {
         class: 'ff-fopt' + (n === s.request.season ? ' ff-on' : ''), text: '第 ' + n + ' 季',
-        onclick: function () { if (s.request.season === n) return; s.request.season = n; renderSeasons(bar); runSearch(false); },
+        onclick: function () { if (s.request.season === n) return; s.request.season = n; s.packTab = null; renderSeasons(bar); runSearch(false); },
       }));
     });
   }
@@ -204,21 +218,74 @@
   function runSearch(refresh) {
     var s = drawer.search;
     var list = s.list;
+    if (s.searchController) s.searchController.abort();
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    s.searchController = controller;
+    removeRail();
+    if (s.packSlot) s.packSlot.innerHTML = '';
     skeleton(list, 4);
     list.insertBefore(el('div', { class: 'ff-hint', text: refresh ? '正在重新搜索…' : '正在搜索资源…' }), list.firstChild);
     s.request.refresh = refresh;
     var mine = s;
     var season = s.request.season;
-    api('POST', 'search', s.request).then(function (r) {
-      if (!drawer || drawer.search !== mine || mine.request.season !== season) return;
-      mine.result = r;
-      if (drawer.view === 'search') renderReleases(r);
-    }).catch(function (e) {
-      if (drawer && drawer.search === mine && drawer.view === 'search') message(list, e.message, 'ff-error');
-    });
+    var retried = false;
+
+    function current() {
+      return !(controller && controller.signal.aborted) && drawer && drawer.search === mine && mine.request.season === season;
+    }
+
+    // 两步搜索：先拿优选结果马上展示；还不够时再异步请求降级结果，回来后整体重绘
+    function fetchFallback() {
+      var body = Object.assign({}, s.request, { stage: 'fallback' });
+      api('POST', 'search', body, { signal: controller ? controller.signal : undefined }).then(function (r) {
+        if (!current()) return;
+        mine.result = r;
+        if (drawer.view === 'search') renderReleases(r);
+      }).catch(function (e) {
+        if (e && e.name === 'AbortError') return;
+        if (!current()) return;
+        var hint = mine.list.querySelector('.ff-more');
+        if (hint) hint.textContent = '补充搜索失败，可点右上角刷新重试';
+      });
+    }
+
+    function fetchSearch() {
+      var body = Object.assign({}, s.request, { stage: 'preferred' });
+      api('POST', 'search', body, { signal: controller ? controller.signal : undefined }).then(function (r) {
+        if (!current()) return;
+        mine.result = r;
+        if (drawer.view === 'search') {
+          if (r.needsFallback && !r.releases.length) {
+            skeleton(list, 4);
+            list.insertBefore(el('div', { class: 'ff-hint ff-more', text: '没有找到优选资源，正在扩大搜索范围…' }), list.firstChild);
+          } else {
+            renderReleases(r);
+            if (r.needsFallback) list.insertBefore(el('div', { class: 'ff-hint ff-more', text: '正在补充更多资源…' }), list.firstChild);
+          }
+        }
+        if (r.needsFallback) fetchFallback();
+      }).catch(function (e) {
+        if (e && e.name === 'AbortError') return;
+        if (controller && controller.signal.aborted) return;
+        // fetch 的网络层失败没有 HTTP status；切季/重启时偶发。搜索是只读请求，自动重试一次。
+        if (!e.status && !retried) {
+          retried = true;
+          if (!drawer || drawer.search !== mine || mine.request.season !== season || mine.searchController !== controller) return;
+          skeleton(list, 4);
+          list.insertBefore(el('div', { class: 'ff-hint', text: '网络连接中断，正在重试…' }), list.firstChild);
+          setTimeout(fetchSearch, 1200);
+          return;
+        }
+        if (drawer && drawer.search === mine && drawer.view === 'search') {
+          message(list, e.status ? e.message : '网络连接中断，请检查 Jellyfin 服务后重试', 'ff-error');
+        }
+      });
+    }
+
+    fetchSearch();
   }
 
-  // 发布者只显示为"优选"，不显示具体发布站
+  // 版本标签：优选、分辨率、HDR、编码等
   function chips(t, preferred) {
     var main = resLabel(t.resolution);
     return [preferred ? el('span', { class: 'ff-chip ff-chip-pub', text: '优选' }) : null, main ? el('span', { class: 'ff-chip ff-chip-hi', text: main }) : null]
@@ -229,53 +296,189 @@
     if (q.isVip) return el('div', { class: 'ff-quota' }, [icon('workspace_premium', 'ff-gold'), el('span', { text: q.licenseStatus })]);
     var pct = q.freeLimit ? Math.min(100, Math.round(q.used * 100 / q.freeLimit)) : 0;
     return el('div', { class: 'ff-quota' }, [
-      el('span', { text: '本月免费额度' }),
+      el('span', { class: 'ff-quota-label', text: '本月免费额度' }),
+      el('span', { class: 'ff-quota-short', text: '额度' }),
       el('div', { class: 'ff-meter' }, [el('div', { class: 'ff-meter-bar' + (pct >= 100 ? ' ff-full' : ''), style: 'width:' + pct + '%' })]),
       el('span', { class: 'ff-dim', text: q.used + ' / ' + q.freeLimit }),
     ]);
   }
 
   function renderReleases(r) {
-    var list = drawer.search.list;
+    var s = drawer.search;
+    var list = s.list;
     list.innerHTML = '';
-    list.appendChild(el('div', { class: 'ff-rtools' }, [
-      quotaLine(r.quota),
-      el('button', { class: 'ff-icon-btn', title: '重新搜索', 'aria-label': '重新搜索', onclick: function () { runSearch(true); } }, [icon('refresh')]),
-    ]));
+    removeRail();
+    if (s.packSlot) s.packSlot.innerHTML = '';
+    drawer.quota.innerHTML = '';
+    if (r.quota) drawer.quota.appendChild(quotaLine(r.quota));
     if (r.sourceErrors) list.appendChild(el('div', { class: 'ff-note ff-error', text: '部分资源源暂时不可用，结果可能不全，稍后可点右上角刷新' }));
     if (!r.releases.length) {
       emptyState(list.appendChild(el('div')), 'search_off', '没有找到合适的资源', el('div', { class: 'ff-dim ff-small', text: '可以稍后刷新再试，或换一季' }));
       return;
     }
-    list.appendChild(el('div', { class: 'ff-hint', text: '共 ' + r.releases.length + ' 个版本' + (r.fromCache ? '（缓存结果，可点右上角刷新）' : '') }));
-    r.releases.forEach(function (rel, idx) {
-      var btn = el('button', { class: 'ff-btn ff-dl-btn' }, [icon('download'), el('span', { text: '下载' })]);
-      if (rel.__sent) markSent(btn);
-      btn.addEventListener('click', function () {
-        if (rel.__sent) return;
-        btn.disabled = true; btn.lastChild.textContent = '提交中…';
-        api('POST', 'tasks', { query: r.query, releaseId: rel.id }).then(function () {
-          rel.__sent = true;
-          markSent(btn);
-          toast('已交给迅雷', { label: '查看下载任务', run: showTasks });
-          api('GET', 'tasks').then(function (tasks) { if (drawer) { drawer.cache.tasks = tasks; refreshTaskCount(); } }).catch(function () {});
-        }).catch(function (e) {
-          btn.disabled = false; btn.lastChild.textContent = '下载';
-          if (e.status === 402) showVip(e.message); else toast(e.message, null, true);
-        });
-      });
-      list.appendChild(el('div', { class: 'ff-rcard', style: 'animation-delay:' + Math.min(idx, 10) * 30 + 'ms' }, [
-        el('div', { class: 'ff-rmain' }, [
-          el('div', { class: 'ff-rname', text: rel.displayName }),
-          el('div', { class: 'ff-meta' }, chips(rel.traits, rel.preferred).concat([
-            rel.fileCount > 1 ? el('span', { class: 'ff-dim', text: rel.fileCount + ' 个文件' }) : null,
-            el('span', { class: 'ff-dim', text: gb(rel.sizeBytes) }),
-            el('span', { class: 'ff-dim', text: date(rel.createdAt) }),
-          ])),
-        ]),
-        btn,
+
+    // 电影：直接列出全部版本
+    if (r.query.kind !== 'Series') {
+      list.appendChild(el('div', { class: 'ff-hint', text: '共 ' + r.releases.length + ' 个版本' + (r.fromCache ? '（缓存结果，可点右上角刷新）' : '') }));
+      var box = list.appendChild(el('div', { class: 'ff-rlist' }));
+      r.releases.forEach(function (rel, idx) { box.appendChild(releaseCard(r, rel, idx)); });
+      return;
+    }
+
+    // 剧集：按 整季 / 多集 / 单集 分开展示，季选择右侧的下拉框切换
+    var groups = { full: [], multi: [], single: [] };
+    r.releases.forEach(function (x) { groups[packType(x)].push(x); });
+    var byEpisode = function (x, y) {
+      var a = x.coverage, b = y.coverage;
+      return (a.from || 0) - (b.from || 0) || ((a.to || 0) - (a.from || 0)) - ((b.to || 0) - (b.from || 0))
+        || (y.preferred ? 1 : 0) - (x.preferred ? 1 : 0) || (x.demoted ? 1 : 0) - (y.demoted ? 1 : 0)
+        || (y.traits.resolution || 0) - (x.traits.resolution || 0);
+    };
+    groups.multi.sort(byEpisode);
+    groups.single.sort(byEpisode);
+    if (!s.packTab || !groups[s.packTab].length) {
+      s.packTab = ['full', 'multi', 'single'].filter(function (k) { return groups[k].length; })[0];
+    }
+    if (s.packSlot) {
+      s.packSlot.innerHTML = '';
+      s.packSlot.appendChild(packSelect(groups, s.packTab, function (key) { s.packTab = key; renderReleases(r); }));
+    }
+    var body = list.appendChild(el('div', { class: 'ff-rlist' }));
+
+    if (s.packTab !== 'single') {
+      groups[s.packTab].forEach(function (rel, idx) { body.appendChild(releaseCard(r, rel, idx)); });
+      return;
+    }
+
+    // 单集：按集分组，右侧导航条悬停显示集数，点击跳到那一集
+    var eps = [];
+    var current = null;
+    groups.single.forEach(function (rel, idx) {
+      var e = episodesOf(rel)[0];
+      if (!current || current.episode !== e) {
+        current = { episode: e, count: 0, head: el('div', { class: 'ff-epgroup' }) };
+        eps.push(current);
+        body.appendChild(current.head);
+      }
+      current.count++;
+      body.appendChild(releaseCard(r, rel, idx));
+    });
+    eps.forEach(function (g) { g.head.textContent = epLabel(g.episode) + ' · ' + g.count + ' 个版本'; });
+    if (eps.length > 1) showRail(eps);
+  }
+
+  var PACK_TYPES = [{ key: 'full', label: '整季' }, { key: 'multi', label: '多集' }, { key: 'single', label: '单集' }];
+
+  // 完整的一季才算整季；覆盖两集以上但不完整的算多集（如 第01-06集）
+  function packType(rel) {
+    var c = rel.coverage;
+    if (!c || c.fullSeason) return 'full';
+    return episodesOf(rel).length > 1 ? 'multi' : 'single';
+  }
+
+  function epLabel(e) { return e == null ? '集数未知' : '第 ' + (e < 10 ? '0' + e : e) + ' 集'; }
+
+  function packSelect(groups, value, onChange) {
+    var current = PACK_TYPES.filter(function (t) { return t.key === value; })[0];
+    var menu = el('div', { class: 'ff-pmenu', role: 'listbox' });
+    var wrap = el('div', { class: 'ff-pselect' });
+    var btn = el('button', { class: 'ff-pbtn', 'aria-haspopup': 'listbox', onclick: function (e) { e.stopPropagation(); toggle(!wrap.classList.contains('ff-open')); } }, [
+      el('span', { text: current.label }),
+      icon('expand_more', 'ff-pcaret'),
+    ]);
+    PACK_TYPES.forEach(function (t) {
+      var n = groups[t.key].length;
+      var opt = menu.appendChild(el('button', {
+        class: 'ff-popt' + (t.key === value ? ' ff-on' : ''), role: 'option',
+        onclick: function (e) { e.stopPropagation(); toggle(false); if (t.key !== value) onChange(t.key); },
+      }, [el('span', { text: t.label })]));
+      opt.disabled = !n;
+    });
+    wrap.appendChild(btn);
+    wrap.appendChild(menu);
+    function outside(e) { if (!wrap.contains(e.target)) toggle(false); }
+    function toggle(open) {
+      wrap.classList.toggle('ff-open', open);
+      if (open) document.addEventListener('click', outside, true); else document.removeEventListener('click', outside, true);
+    }
+    return wrap;
+  }
+
+  // 单集导航条：每集一条短横线，当前所在集高亮；悬停时在导航条里展开集数，点击滚动到该集
+  function showRail(eps) {
+    removeRail();
+    var d = drawer;
+    var rail = el('div', { class: 'ff-rail' });
+    var marks = rail.appendChild(el('div', { class: 'ff-rail-marks' }));
+    eps.forEach(function (g, i) {
+      g.mark = marks.appendChild(el('button', { class: 'ff-rail-mark', title: epLabel(g.episode), onclick: function () { jump(i); } }, [
+        el('span', { class: 'ff-rail-label', text: epLabel(g.episode) }),
+        el('span', { class: 'ff-rail-dash' }),
       ]));
     });
+    function jump(i) {
+      var top = eps[i].head.getBoundingClientRect().top - d.body.getBoundingClientRect().top + d.body.scrollTop - 8;
+      d.body.scrollTo({ top: top, behavior: 'smooth' });
+    }
+    function sync() {
+      var edge = d.body.getBoundingClientRect().top + 24;
+      var active = 0;
+      eps.forEach(function (g, i) { if (g.head.getBoundingClientRect().top <= edge) active = i; });
+      if (d.body.scrollTop + d.body.clientHeight >= d.body.scrollHeight - 2) active = eps.length - 1;
+      eps.forEach(function (g, i) { g.mark.classList.toggle('ff-on', i === active); });
+    }
+    d.panel.appendChild(rail);
+    d.body.classList.add('ff-has-rail');
+    d.body.addEventListener('scroll', sync, { passive: true });
+    d.rail = { el: rail, sync: sync };
+    sync();
+  }
+
+  function removeRail() {
+    var d = drawer;
+    if (!d || !d.rail) return;
+    d.body.removeEventListener('scroll', d.rail.sync);
+    d.body.classList.remove('ff-has-rail');
+    d.rail.el.remove();
+    d.rail = null;
+  }
+
+  function episodesOf(rel) {
+    var c = rel.coverage;
+    if (!c) return [];
+    if (c.episodes && c.episodes.length) return c.episodes;
+    var list = [];
+    if (c.from != null) for (var e = c.from; e <= (c.to || c.from); e++) list.push(e);
+    return list;
+  }
+
+  function releaseCard(r, rel, idx) {
+    var btn = el('button', { class: 'ff-btn ff-dl-btn' }, [icon('download'), el('span', { text: '下载' })]);
+    if (rel.__sent) markSent(btn);
+    btn.addEventListener('click', function () {
+      if (rel.__sent) return;
+      btn.disabled = true; btn.lastChild.textContent = '提交中…';
+      api('POST', 'tasks', { query: r.query, releaseId: rel.id }).then(function () {
+        rel.__sent = true;
+        markSent(btn);
+        toast('已交给迅雷', { label: '查看下载任务', run: showTasks });
+        api('GET', 'tasks').then(function (tasks) { if (drawer) { drawer.cache.tasks = tasks; refreshTaskCount(); } }).catch(function () {});
+      }).catch(function (e) {
+        btn.disabled = false; btn.lastChild.textContent = '下载';
+        if (e.status === 402) showVip(e.message); else toast(e.message, null, true);
+      });
+    });
+    return el('div', { class: 'ff-rcard', style: 'animation-delay:' + Math.min(idx, 10) * 30 + 'ms' }, [
+      el('div', { class: 'ff-rmain' }, [
+        el('div', { class: 'ff-rname', text: rel.displayName }),
+        el('div', { class: 'ff-meta' }, chips(rel.traits, rel.preferred).concat([
+          rel.fileCount > 1 ? el('span', { class: 'ff-dim', text: rel.fileCount + ' 个文件' }) : null,
+          el('span', { class: 'ff-dim', text: gb(rel.sizeBytes) }),
+          el('span', { class: 'ff-dim', text: date(rel.createdAt) }),
+        ])),
+      ]),
+      btn,
+    ]);
   }
 
   function markSent(btn) {
@@ -396,7 +599,7 @@
     var back = el('button', { class: 'ff-btn ff-ghost ff-back', text: '← 返回榜单', onclick: showList });
     var list = el('div', { class: 'ff-view' });
     var detail = el('div', { class: 'ff-view', style: 'display:none' });
-    var input = el('input', { class: 'ff-search-input', type: 'search', placeholder: '搜索电影、剧集', 'aria-label': '搜索电影、剧集', autocomplete: 'off' });
+    var input = el('input', { class: 'ff-search-input', type: 'search', placeholder: '全局搜索电影、剧集', 'aria-label': '全局搜索电影、剧集', autocomplete: 'off' });
     var clear = el('button', { class: 'ff-search-clear', title: '清除', 'aria-label': '清除搜索', onclick: function () { input.value = ''; endSearch(); input.focus(); } }, [icon('close')]);
     var searchBox = el('div', { class: 'ff-search' }, [icon('search', 'ff-search-icon'), input, clear]);
     var root = el('div', { class: 'ff-page' }, [
@@ -472,7 +675,8 @@
       srch.totalPages = r.totalPages || 1;
       v.shead.innerHTML = '';
       v.shead.appendChild(el('span', { text: '“' + srch.q + '”的搜索结果' }));
-      v.shead.appendChild(el('span', { class: 'ff-dim', text: r.totalResults ? '约 ' + r.totalResults + ' 条' : '' }));
+      // 全局搜索：在全部电影和剧集里按片名找，不带分类、类型、地区等筛选条件
+      v.shead.appendChild(el('span', { class: 'ff-dim', text: '全部电影和剧集' + (r.totalResults ? ' · 约 ' + r.totalResults + ' 条' : '') + '，不受筛选条件影响' }));
       v.shead.appendChild(el('button', { class: 'ff-btn ff-ghost', text: '返回榜单', onclick: function () { page.input.value = ''; page.searchBox.classList.remove('ff-has-text'); endSearch(); } }));
       r.items.forEach(function (i) { v.sgrid.appendChild(card(i, true)); });
       v.smore.innerHTML = '';
@@ -801,7 +1005,7 @@
   function seasonSection(d) {
     var current = d.seasons.filter(function (s) { return s.number === d.currentSeason; })[0] || d.seasons[d.seasons.length - 1];
     var latest = d.seasons.reduce(function (m, s) { return s.number > m ? s.number : m; }, 0);
-    var others = d.seasons.filter(function (s) { return s !== current; });
+    var others = d.seasons.filter(function (s) { return s !== current; }).sort(function (a, b) { return b.number - a.number; });
     var list = el('div', { class: 'ff-season-list' }, [seasonCard(d, current)]);
     var rest = null;
     var toggle = others.length ? el('button', { class: 'ff-link-btn', text: '查看全部季（共 ' + d.seasons.length + ' 季）', onclick: function () {

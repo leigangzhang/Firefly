@@ -3,6 +3,7 @@ using FireFly.Core;
 using FireFly.Core.Metadata;
 using FireFly.Core.Models;
 using FireFly.Core.Parsing;
+using FireFly.Core.Sources;
 using FireFly.Core.Storage;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -15,7 +16,8 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FireFly.Jellyfin.Api;
 
-public sealed record SearchRequest(string? ItemId, string? Title, string? OriginalTitle, int? Year, MediaKind? Kind, int? Season, string? TmdbId, bool Refresh);
+/// <summary>Stage：preferred 先返回优选结果，fallback 追加降级结果；不传则一次做完。</summary>
+public sealed record SearchRequest(string? ItemId, string? Title, string? OriginalTitle, int? Year, MediaKind? Kind, int? Season, string? TmdbId, bool Refresh, SearchStage? Stage = null);
 
 /// <summary>提交下载只带版本 ID（InfoHash），完整版本和磁力由服务端从搜索缓存里找回。</summary>
 public sealed record SubmitRequest(MediaQuery Query, string ReleaseId);
@@ -83,7 +85,6 @@ public sealed class FireFlyController : ControllerBase
             sameVolumeMovie = SameVolume(dir, paths.MovieRoot),
             sameVolumeSeries = SameVolume(dir, paths.SeriesRoot),
             tmdbConfigured = _runtime.Tmdb.Configured,
-            keywords = _runtime.Keywords(),
             rulesVersion = _runtime.Rules.Version,
             dataDir = _runtime.DataDir,
             libraries = (_runtime.Host as JellyfinMediaHost)?.AllLocations().Select(l => new { l.Library, l.Type, l.Path }),
@@ -330,7 +331,8 @@ public sealed class FireFlyController : ControllerBase
             return ApiJson(new { error = "无法识别要搜索的影片" }, StatusCodes.Status400BadRequest);
         }
 
-        var result = await _runtime.Search.SearchAsync(query, request.Refresh, ct).ConfigureAwait(false);
+        query = await WithTmdbNamesAsync(query, ct).ConfigureAwait(false);
+        var result = await _runtime.Search.SearchAsync(query, request.Refresh, request.Stage ?? SearchStage.Full, ct).ConfigureAwait(false);
 
         // 只下发干净名称和画质信息：不下发原始发布名、磁力、发布站、搜索词和出错的源地址，
         // 避免上游站点被识别、也避免绕过插件直接去资源站搜索
@@ -341,14 +343,17 @@ public sealed class FireFlyController : ControllerBase
             {
                 id = r.InfoHash,
                 displayName = ReleaseDisplay.Name(result.Query, r),
+                coverage = result.Query.Kind == MediaKind.Series ? ReleaseDisplay.Coverage(r, _runtime.Rules, result.Query.SeasonEpisodes) : null,
                 r.SizeBytes,
                 r.CreatedAt,
                 fileCount = r.Files.Count,
                 preferred = !string.IsNullOrEmpty(r.Traits.Publisher),
+                demoted = SearchService.Demotion(r) > 0,
                 traits = new { r.Traits.Resolution, r.Traits.Codec, r.Traits.Hdr, r.Traits.MediaSource, r.Traits.Audio, r.Traits.Subtitles },
             }),
             sourceErrors = result.Errors.Count,
             fromCache = result.FromCache,
+            needsFallback = result.NeedsFallback,
             quota = _runtime.Quota.Status(),
         });
     }
@@ -400,6 +405,30 @@ public sealed class FireFlyController : ControllerBase
     [HttpPost("tasks/{id}/dismiss")]
     [Authorize(Policy = Elevated)]
     public IActionResult Dismiss(string id) => _runtime.App.Dismiss(id) ? Ok() : NotFound();
+
+    /// <summary>有 TMDb ID 时补上原名和中文别名，供资源搜索换名重试；TMDb 不可用时照常用已有片名搜索。</summary>
+    private async Task<MediaQuery> WithTmdbNamesAsync(MediaQuery query, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(query.TmdbId) || !_runtime.Tmdb.Configured)
+        {
+            return query;
+        }
+
+        try
+        {
+            var names = await _runtime.Tmdb.NamesAsync(query.Kind, query.TmdbId, ct).ConfigureAwait(false);
+            return query with
+            {
+                OriginalTitle = query.OriginalTitle ?? Different(names.OriginalTitle, query.Title),
+                AlternateTitles = names.AlternateTitles,
+                SeasonEpisodes = query.Kind == MediaKind.Series && names.SeasonEpisodes?.TryGetValue(query.Season ?? 1, out var count) == true ? count : null,
+            };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            return query;
+        }
+    }
 
     private bool InLibrary(MediaKind kind, string tmdbId, string title, int? year) =>
         _runtime.Host.Contains(new MediaQuery { Kind = kind, Title = title, Year = year, TmdbId = tmdbId });

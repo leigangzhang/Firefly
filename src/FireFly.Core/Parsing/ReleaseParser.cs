@@ -14,14 +14,21 @@ public static partial class ReleaseParser
             Resolution = ParseResolution(text),
             Codec = Match(text, CodecRegex(), m => m.Groups["h265"].Success ? "H.265" : m.Groups["h264"].Success ? "H.264" : "AV1"),
             Hdr = ParseHdr(text),
-            MediaSource = Match(text, SourceRegex(), m => m.Groups["remux"].Success ? "REMUX" : m.Groups["bluray"].Success ? "BluRay" : m.Groups["web"].Success ? "WEB-DL" : "HDTV"),
+            MediaSource = CamRegex().IsMatch(text) ? CamSource : Match(text, SourceRegex(), m => m.Groups["remux"].Success ? "REMUX" : m.Groups["bluray"].Success ? "BluRay" : m.Groups["web"].Success ? "WEB-DL" : "HDTV"),
             Audio = ParseAudio(text),
             Subtitles = ParseSubtitles(text),
             Year = ParseYear(text),
             Season = ParseSeason(text),
             Publisher = ParsePublisher(text),
+            ForeignOnly = ForeignRegex().IsMatch(text) && !ChineseOrEnglishRegex().IsMatch(text),
         };
     }
+
+    /// <summary>影院偷录的枪版（CAM / TS / TC），画质差，排序时放到最后。</summary>
+    public const string CamSource = "枪版";
+
+    /// <summary>成人内容：同名恶搞片常混进搜索结果，直接过滤。</summary>
+    public static bool IsAdult(string text) => AdultRegex().IsMatch(text);
 
     public static int ParseResolution(string text)
     {
@@ -166,6 +173,18 @@ public static partial class ReleaseParser
         var ones = tenIndex == raw.Length - 1 ? 0 : digits.IndexOf(raw[^1]);
         return tens < 0 || ones < 0 ? null : tens * 10 + ones;
     }
+
+    [GeneratedRegex(@"HDCAM|CAMRip|HDTS|TELESYNC|TELECINE|HDTC|枪版|(?<![A-Za-z0-9])(?:CAM|TS|TC)(?=[-. _\]\)][^.]*\S)", RegexOptions.None)]
+    private static partial Regex CamRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z])(?:XXX|Porn|OnlyFans|Brazzers)(?![A-Za-z])|成人(?:短剧|影片|电影|视频)|色情", RegexOptions.IgnoreCase)]
+    private static partial Regex AdultRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z])(?:rus|LostFilm|Ukr|Hurtom|Subtitulado|Latino|Castellano|VOSTFR|TRUEFRENCH|FRENCH|German|iTALiAN|ITA|Esp|Dublado|Legendado|Hindi|Tamil|Telugu)(?![A-Za-z])", RegexOptions.IgnoreCase)]
+    private static partial Regex ForeignRegex();
+
+    [GeneratedRegex(@"\p{IsCJKUnifiedIdeographs}|(?<![A-Za-z])(?:ENG|English|CHS|CHT|CHI|Chinese|DUAL)(?![A-Za-z])", RegexOptions.IgnoreCase)]
+    private static partial Regex ChineseOrEnglishRegex();
 
     [GeneratedRegex(@"(?<![0-9])(2160[pP]|4[kK]|UHD)(?![0-9a-zA-Z])")]
     private static partial Regex Res2160Regex();

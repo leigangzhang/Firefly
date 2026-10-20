@@ -96,7 +96,7 @@ public class SearchServiceTests
 
         public string Name => "fake";
 
-        public Task<IReadOnlyList<Release>> SearchAsync(string keyword, CancellationToken ct)
+        public Task<IReadOnlyList<Release>> SearchAsync(string keyword, CancellationToken ct, int? maxPages = null)
         {
             Asked.Add(keyword);
             return Task.FromResult(_answer(keyword));
@@ -118,7 +118,183 @@ public class SearchServiceTests
     }
 
     [Fact]
-    public void FiltersWrongYearWrongSeasonSingleEpisodesAndNoise()
+    public async Task TriesOriginalTitleWithPublisherBeforeFallingBack()
+    {
+        var full = R("H3", "【高清剧集网发布 www.DDHDTV.com】龙之家族.第三季[全08集].House.of.the.Dragon.S03.2160p",
+            ("House.of.the.Dragon.S03E01.mkv", 5 * Gb), ("House.of.the.Dragon.S03E02.mkv", 5 * Gb));
+        var source = new FakeSource(k => k == "House of the Dragon DDHDTV" ? new[] { full } : Array.Empty<Release>());
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "DDHDTV", "高清剧集网" });
+        var query = new MediaQuery
+        {
+            Kind = MediaKind.Series, Title = "权力的游戏前传：龙族", OriginalTitle = "House of the Dragon",
+            AlternateTitles = new[] { "龙之家族" }, Year = 2022, Season = 3,
+        };
+
+        var result = await service.SearchAsync(query, false, default);
+
+        // 冒号换成空格；剧集按 不带季号 / 第三季 / S03 三种写法搜
+        Assert.Equal(
+            new[] { "权力的游戏前传 龙族 DDHDTV", "权力的游戏前传 龙族 第三季 DDHDTV", "权力的游戏前传 龙族 S03 DDHDTV", "权力的游戏前传 龙族 高清剧集网", "权力的游戏前传 龙族 第三季 高清剧集网", "权力的游戏前传 龙族 S03 高清剧集网" },
+            source.Asked.Take(6));
+        Assert.Contains("House of the Dragon S03", source.Asked);
+        Assert.Contains("House of the Dragon 第三季", source.Asked);
+        Assert.Equal(new[] { "H3" }, result.Releases.Select(r => r.InfoHash));
+    }
+
+    [Fact]
+    public async Task SeriesSeasonSearchAddsSingleEpisodeWhenOnlyFullSeasonFound()
+    {
+        var full = R("F1", "权力的游戏.第四季[全10集].Game.of.Thrones.S04.2160p",
+            ("Game.of.Thrones.S04E01.mkv", 5 * Gb), ("Game.of.Thrones.S04E02.mkv", 5 * Gb));
+        var single = R("S1", "权力的游戏.Game.of.Thrones.S04E01.1080p", ("Game.of.Thrones.S04E01.mkv", 3 * Gb));
+        var source = new FakeSource(k => k == "权力的游戏 DDHDTV" ? new[] { full }
+            : k == "权力的游戏 S04" ? new[] { single }
+            : Array.Empty<Release>());
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "DDHDTV", "高清剧集网" });
+        var query = new MediaQuery
+        {
+            Kind = MediaKind.Series, Title = "权力的游戏", OriginalTitle = "Game of Thrones", Year = 2011, Season = 4,
+        };
+
+        var result = await service.SearchAsync(query, false, default);
+
+        Assert.Contains("权力的游戏 S04", source.Asked);
+        Assert.Contains(result.Releases, r => r.InfoHash == "F1");
+        Assert.Contains(result.Releases, r => r.InfoHash == "S1");
+    }
+
+    [Fact]
+    public async Task SeasonSearchPrefersPublisherKeywordsBeforeBareFallback()
+    {
+        var full = R("F2", "权力的游戏.第四季[全10集].Game.of.Thrones.S04.2160p",
+            ("Game.of.Thrones.S04E01.mkv", 5 * Gb), ("Game.of.Thrones.S04E02.mkv", 5 * Gb));
+        var single = R("S2", "权力的游戏.Game.of.Thrones.S04E01.1080p", ("Game.of.Thrones.S04E01.mkv", 3 * Gb));
+        var source = new FakeSource(k => k == "权力的游戏 DDHDTV" ? new[] { full }
+            : k == "权力的游戏 S04 DDHDTV" ? new[] { single }
+            : Array.Empty<Release>());
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "DDHDTV", "高清剧集网" });
+        var query = new MediaQuery
+        {
+            Kind = MediaKind.Series, Title = "权力的游戏", OriginalTitle = "Game of Thrones", Year = 2011, Season = 4,
+        };
+
+        var result = await service.SearchAsync(query, false, default);
+
+        var premiumIndex = source.Asked.IndexOf("权力的游戏 S04 DDHDTV");
+        var bareIndex = source.Asked.IndexOf("权力的游戏 S04");
+        Assert.True(premiumIndex >= 0);
+        Assert.True(bareIndex < 0 || premiumIndex < bareIndex);
+        Assert.Contains(result.Releases, r => r.InfoHash == "F2");
+        Assert.Contains(result.Releases, r => r.InfoHash == "S2");
+    }
+
+    [Fact]
+    public async Task SeasonSearchAppendsBareFallbackWhenAPackTypeHasFewerThanFive()
+    {
+        var full = R("F3", "权力的游戏.第四季[全10集].Game.of.Thrones.S04.2160p",
+            ("Game.of.Thrones.S04E01.mkv", 5 * Gb), ("Game.of.Thrones.S04E02.mkv", 5 * Gb));
+        var single = R("S3", "权力的游戏.Game.of.Thrones.S04E01.1080p", ("Game.of.Thrones.S04E01.mkv", 3 * Gb));
+        var multi = Enumerable.Range(1, 5).Select(i => R($"M{i}", "权力的游戏.Game.of.Thrones.S04E01-E02.1080p",
+            ("Game.of.Thrones.S04E01.mkv", 3 * Gb), ("Game.of.Thrones.S04E02.mkv", 3 * Gb))).ToList();
+        var source = new FakeSource(k => k == "权力的游戏 DDHDTV" ? new[] { full }
+            : k == "权力的游戏 S04 DDHDTV" ? new[] { single }
+            : k == "权力的游戏 S04" ? multi
+            : Array.Empty<Release>());
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "DDHDTV", "高清剧集网" });
+        var query = new MediaQuery
+        {
+            Kind = MediaKind.Series, Title = "权力的游戏", OriginalTitle = "Game of Thrones", Year = 2011, Season = 4,
+        };
+
+        var result = await service.SearchAsync(query, false, default);
+
+        Assert.Contains("权力的游戏 S04", source.Asked);
+        Assert.Contains(result.Releases, r => r.InfoHash == "F3");
+        Assert.Contains(result.Releases, r => r.InfoHash == "S3");
+        Assert.All(multi, m => Assert.Contains(result.Releases, r => r.InfoHash == m.InfoHash));
+    }
+
+    [Fact]
+    public void AlternateTitleCountsAsNameMatch()
+    {
+        var query = new MediaQuery { Kind = MediaKind.Series, Title = "权力的游戏前传：龙族", AlternateTitles = new[] { "龙之家族" } };
+        Assert.True(SearchService.NameMentions("龙之家族.第三季.1080p", query));
+        Assert.False(SearchService.NameMentions("权力的游戏.第八季.1080p", query));
+        Assert.Equal(new[] { "a", "b", "c", "d" }, SearchService.SearchTitles(new MediaQuery { Title = "a", OriginalTitle = "A", AlternateTitles = new[] { "b", "c", "d", "e" } }));
+    }
+
+    [Fact]
+    public void SearchTitlesReplaceColonsWithSpace()
+    {
+        // 资源站实测："降世神通：七净土"、"降世神通七净土" 都是 0 条，"降世神通 七净土" 有结果；英文带冒号同样 0 条
+        var query = new MediaQuery { Title = "蜘蛛侠：崭新之日", OriginalTitle = "Spider-Man: Brand New Day" };
+        Assert.Equal(new[] { "蜘蛛侠 崭新之日", "Spider-Man Brand New Day" }, SearchService.SearchTitles(query));
+    }
+
+    [Theory]
+    [InlineData(1, "一")]
+    [InlineData(10, "十")]
+    [InlineData(12, "十二")]
+    [InlineData(20, "二十")]
+    [InlineData(35, "三十五")]
+    public void SeasonNumberInChinese(int n, string expected) => Assert.Equal(expected, SearchService.ChineseNumeral(n));
+
+    [Fact]
+    public async Task PreferredStageReturnsFirstThenFallbackAppends()
+    {
+        var pref = R("P1", "【高清剧集网发布 www.BPHDTV.com】黑帮领地[第10集].MobLand.S01.2160p", ("MobLand.S01E10.mkv", 3 * Gb));
+        var bare = R("B1", "MobLand.S01E09.1080p.WEB", ("MobLand.S01E09.mkv", 2 * Gb));
+        var source = new FakeSource(k => k == "MobLand 第一季 高清剧集网" ? new[] { pref } : k == "MobLand S01" ? new[] { bare } : Array.Empty<Release>());
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "高清剧集网" });
+        var query = new MediaQuery { Kind = MediaKind.Series, Title = "MobLand", Year = 2025, Season = 1 };
+
+        var first = await service.SearchAsync(query, false, SearchStage.Preferred, default);
+        Assert.True(first.NeedsFallback);
+        Assert.Equal(new[] { "P1" }, first.Releases.Select(r => r.InfoHash));
+        Assert.DoesNotContain("MobLand S01", source.Asked);
+
+        var asked = source.Asked.Count;
+        var second = await service.SearchAsync(query, true, SearchStage.Fallback, default);
+        Assert.False(second.NeedsFallback);
+        Assert.Equal(new[] { "P1", "B1" }, second.Releases.Select(r => r.InfoHash));
+        // 降级阶段接着优选结果做，不重搜优选关键词
+        Assert.DoesNotContain(source.Asked.Skip(asked), k => k.Contains("高清剧集网"));
+
+        var cached = await service.SearchAsync(query, false, SearchStage.Preferred, default);
+        Assert.True(cached.FromCache);
+        Assert.False(cached.NeedsFallback);
+        Assert.Equal(2, cached.Releases.Count);
+    }
+
+    [Fact]
+    public async Task SearchesTitleWithColonReplacedBySpace()
+    {
+        var movie = R("C1", "沙丘：第二部.2024.2160p.BluRay", ("Dune.Part.Two.mkv", 40 * Gb));
+        var source = new FakeSource(k => k == "沙丘 第二部 DDHDTV" ? new[] { movie } : Array.Empty<Release>());
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "DDHDTV", "高清剧集网" });
+
+        var result = await service.SearchAsync(new MediaQuery { Kind = MediaKind.Movie, Title = "沙丘：第二部", Year = 2024 }, false, default);
+
+        Assert.Contains("沙丘 第二部 DDHDTV", source.Asked);
+        Assert.DoesNotContain(source.Asked, k => k.Contains('：'));
+        Assert.Equal(new[] { "C1" }, result.Releases.Select(r => r.InfoHash));
+    }
+
+    [Fact]
+    public void ParsesChineseAlternativeTitles()
+    {
+        const string json = """
+        {"original_name":"House of the Dragon","alternative_titles":{"results":[
+          {"iso_3166_1":"US","title":"HOTD"},{"iso_3166_1":"TW","title":"龍族前傳"},{"iso_3166_1":"CN","title":"龙之家族"},{"iso_3166_1":"CN","title":"龙之家族"}]}}
+        """;
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var names = TmdbClient.ParseNames(MediaKind.Series, doc.RootElement);
+        Assert.Equal("House of the Dragon", names.OriginalTitle);
+        Assert.Equal(new[] { "龙之家族", "龍族前傳" }, names.AlternateTitles);
+    }
+
+    [Fact]
+    public void FiltersWrongYearWrongSeasonAndNoise()
     {
         var service = new SearchService(Array.Empty<IResourceSource>, () => Rules, Array.Empty<string>);
         var movie = new MediaQuery { Kind = MediaKind.Movie, Title = "沙丘", Year = 2021 };
@@ -140,7 +316,54 @@ public class SearchServiceTests
             R("S2E1", "王冠.S02E01.1080p", ("E01.mkv", 2 * Gb)),
             R("NONE", "王冠 1080p", ("E01.mkv", 2 * Gb), ("E02.mkv", 2 * Gb)),
         }, season2);
-        Assert.Equal(new[] { "S2" }, seriesKept.Select(r => r.InfoHash));
+        // 单集种子也保留（前端放在"单集 / 分集"标签下）
+        Assert.Equal(new[] { "S2", "S2E1" }, seriesKept.Select(r => r.InfoHash));
+    }
+
+    [Fact]
+    public void TitleMustStandAloneInReleaseName()
+    {
+        var odyssey = new MediaQuery { Kind = MediaKind.Movie, Title = "奥德赛", OriginalTitle = "The Odyssey", Year = 2026 };
+        Assert.True(SearchService.NameMentions("《奥德赛 (2026)》 电影 BD-1080p", odyssey));
+        Assert.True(SearchService.NameMentions("The.Odyssey.2026.1080p.AMZN.WEB-DL", odyssey));
+        Assert.False(SearchService.NameMentions("北极熊：一个夏天的奥德赛.720p.BD中文字幕", odyssey));
+        Assert.False(SearchService.NameMentions("BBC.海洋奥德赛", odyssey));
+        Assert.False(SearchService.NameMentions("TheOdysseys.2026", odyssey));
+
+        var havens = new MediaQuery { Kind = MediaKind.Series, Title = "降世神通：七净土", OriginalTitle = "Avatar: Seven Havens", Season = 1 };
+        Assert.True(SearchService.NameMentions("降世神通.七净土S01E04.1080p", havens));
+        Assert.True(SearchService.NameMentions("www.UIndex.org    -    Avatar Seven Havens S01E04 1080p", havens));
+
+        var below = new MediaQuery { Kind = MediaKind.Series, Title = "暗潮之下", OriginalTitle = "Below", Season = 1 };
+        Assert.False(SearchService.NameMentions("Belowground.S01.1080p", below));
+        Assert.True(SearchService.NameMentions("Below.2026.S01E01.1080p", below));
+    }
+
+    [Fact]
+    public void FiltersAdultAndDemotesCamAndForeignOnly()
+    {
+        var service = new SearchService(Array.Empty<IResourceSource>, () => Rules, Array.Empty<string>);
+        var movie = new MediaQuery { Kind = MediaKind.Movie, Title = "奥德赛", OriginalTitle = "The Odyssey", Year = 2026 };
+        var kept = service.Filter(new[]
+        {
+            R("OK", "The.Odyssey.2026.1080p.WEB-DL", ("a.mkv", 3 * Gb)),
+            R("XXX", "The Odyssey XXX. A Porn Parody (1080p)", ("a.mkv", 3 * Gb)),
+        }, movie);
+        Assert.Equal(new[] { "OK" }, kept.Select(r => r.InfoHash));
+
+        Assert.Equal(ReleaseParser.CamSource, ReleaseParser.Parse("The.Odyssey.2026.1080p.TELESYNC.HEVC").MediaSource);
+        Assert.Equal(ReleaseParser.CamSource, ReleaseParser.Parse("The-Odyssey-2026-1080p-TS-V2-WEB.DL").MediaSource);
+        Assert.NotEqual(ReleaseParser.CamSource, ReleaseParser.Parse("Show.S01E02.1080p.WEB-DL.x264-K83.mkv.ts").MediaSource);
+        Assert.True(ReleaseParser.Parse("Avatar.Seven.Havens.S01E03.rus.LostFilm.TV.avi").ForeignOnly);
+        Assert.False(ReleaseParser.Parse("Avatar.S01E02.1080p.WEB-DL.DDP5.1.ENG.ITA.H264-TBK").ForeignOnly);
+
+        var ordered = SearchService.Order(new[]
+        {
+            R("CAM", "The.Odyssey.2026.2160p.HDTS", ("a.mkv", Gb)),
+            R("RUS", "The.Odyssey.2026.2160p.rus", ("a.mkv", Gb)),
+            R("WEB", "The.Odyssey.2026.1080p.WEB-DL", ("a.mkv", Gb)),
+        }, Array.Empty<string>());
+        Assert.Equal(new[] { "WEB", "RUS", "CAM" }, ordered.Select(r => r.InfoHash));
     }
 
     [Fact]
@@ -623,6 +846,79 @@ public class ReleaseDisplayTests
     }
 }
 
+public class EpisodeCoverageTests
+{
+    private const long Gb = 1L << 30;
+    private static readonly RulesDocument Rules = RulesLoader.LoadDefault();
+
+    private static Release R(string name, params string[] videos) => new()
+    {
+        Name = name,
+        Files = videos.Select(v => new ReleaseFile(v, 2 * Gb)).Append(new ReleaseFile("更多资源.png", 1 << 20)).ToList(),
+        Traits = ReleaseParser.Parse(name),
+    };
+
+    [Fact]
+    public void ClassifiesPacksAndEpisodes()
+    {
+        var full = ReleaseDisplay.Coverage(R("牵牛和仙女[全12集].S01.1080p", "E01.mkv", "E02.mkv"), Rules);
+        Assert.True(full.FullSeason);
+
+        var range = ReleaseDisplay.Coverage(R("牵牛和仙女[第08-10集].S01.1080p", "S01E08.mkv", "S01E09.mkv", "S01E10.mkv"), Rules);
+        Assert.False(range.FullSeason);
+        Assert.Equal(new[] { 8, 9, 10 }, range.Episodes);
+
+        var single = ReleaseDisplay.Coverage(R("【高清剧集网发布 www.DDHDTV.com】龙之家族.第三季[第08集].House.of.the.Dragon.S03.2160p", "House.of.the.Dragon.S03E08.Episode.8.2160p.mkv"), Rules);
+        Assert.False(single.FullSeason);
+        Assert.Equal((8, 8), (single.From, single.To));
+
+        var unnamed = ReleaseDisplay.Coverage(R("Show.S02.1080p", "Show.S02E05.mkv"), Rules);
+        Assert.Equal(new[] { 5 }, unnamed.Episodes);
+
+        var pack = ReleaseDisplay.Coverage(R("Show.S02.1080p", "Show.S02E01.mkv", "Show.S02E02.mkv"), Rules);
+        Assert.True(pack.FullSeason);
+        Assert.Equal((1, 2), (pack.From, pack.To));
+    }
+
+    [Fact]
+    public void SeasonNamedPackWithFewerEpisodesIsPartial()
+    {
+        // 降世神通：七净土 S01 实测：名字只写季号、只含 E01-E03 的包
+        var partial = ReleaseDisplay.Coverage(R("Avatar.Seven.Havens.S01", "Avatar.Seven.Havens.S01E01.1080p.mkv", "Avatar.Seven.Havens.S01E02.1080p.mkv", "Avatar.Seven.Havens.S01E03.1080p.mkv"), Rules, seasonEpisodes: 10);
+        Assert.False(partial.FullSeason);
+        Assert.Equal(new[] { 1, 2, 3 }, partial.Episodes);
+
+        var complete = ReleaseDisplay.Coverage(R("Show.S01", "Show.S01E01.mkv", "Show.S01E02.mkv", "Show.S01E03.mkv"), Rules, seasonEpisodes: 3);
+        Assert.True(complete.FullSeason);
+
+        var lateStart = ReleaseDisplay.Coverage(R("Show.S01", "Show.S01E04.mkv", "Show.S01E05.mkv"), Rules);
+        Assert.False(lateStart.FullSeason);
+        Assert.Equal((4, 5), (lateStart.From, lateStart.To));
+
+        // 名字写了"全N集"的仍按整季
+        Assert.True(ReleaseDisplay.Coverage(R("牵牛和仙女[全12集].S01", "E01.mkv", "E02.mkv"), Rules, seasonEpisodes: 12).FullSeason);
+    }
+
+    [Fact]
+    public void ParsesSeasonEpisodeCounts()
+    {
+        const string json = """
+        {"original_name":"Avatar: Seven Havens","seasons":[{"season_number":0,"episode_count":2},{"season_number":1,"episode_count":10}]}
+        """;
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var names = TmdbClient.ParseNames(MediaKind.Series, doc.RootElement);
+        Assert.Equal(10, names.SeasonEpisodes![1]);
+    }
+
+    [Fact]
+    public void SingleEpisodeDisplayNameShowsEpisode()
+    {
+        var query = new MediaQuery { Kind = MediaKind.Series, Title = "权力的游戏前传：龙族", Season = 3 };
+        var rel = R("House.of.the.Dragon.S03.2160p", "House.of.the.Dragon.S03E08.mkv");
+        Assert.Equal("权力的游戏前传：龙族 S03 第08集", ReleaseDisplay.Name(query, rel));
+    }
+}
+
 public class TitleSearchTests
 {
     [Fact]
@@ -639,6 +935,14 @@ public class TitleSearchTests
         Assert.Equal(2, result.TotalPages);
         Assert.Equal(new[] { ("1", MediaKind.Movie, 2021), ("3", MediaKind.Series, 2024) }, result.Items.Select(i => (i.TmdbId, i.Kind, i.Year ?? 0)));
         Assert.Equal("沙丘：预言", result.Items[1].Title);
+    }
+
+    [Fact]
+    public void QueryVariantFixesCommonChineseTypo()
+    {
+        Assert.Equal("权力的游戏", TmdbClient.QueryVariant("权利的游戏"));
+        Assert.Null(TmdbClient.QueryVariant("权力的游戏"));
+        Assert.Null(TmdbClient.QueryVariant("沙丘"));
     }
 }
 
