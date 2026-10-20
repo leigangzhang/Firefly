@@ -157,13 +157,15 @@ public sealed class QuotaLedger
         return new QuotaStatus(license.IsVip, license.Status, used, _freeLimit);
     }
 
+    /// <summary>这部片 / 这一季本月是否已经计过数。</summary>
+    public bool IsCounted(string quotaKey) =>
+        _store.Read(s => s.Months.TryGetValue(Month, out var list) && list.Contains(quotaKey));
+
     /// <summary>这部片现在能不能提交（已经计过数的总是可以）。</summary>
     public bool CanSubmit(string quotaKey)
     {
         var status = Status();
-        return status.IsVip
-            || _store.Read(s => s.Months.TryGetValue(Month, out var list) && list.Contains(quotaKey))
-            || status.Used < _freeLimit;
+        return status.IsVip || IsCounted(quotaKey) || status.Used < _freeLimit;
     }
 
     /// <summary>提交成功后记一笔。</summary>

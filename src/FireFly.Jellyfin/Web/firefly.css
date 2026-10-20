@@ -142,6 +142,10 @@
 .ff-btn:active:not(:disabled){transform:scale(.97)}
 .ff-btn .material-icons{font-size:18px}
 .ff-dl-btn{flex:0 0 auto;min-width:96px;padding:8px 14px}
+.ff-dl-btn.ff-locked{background:#2a2e36;color:#9aa0a6}
+.ff-dl-btn.ff-locked:hover{background:#323640;color:#e8e8e8}
+.ff-quota-note{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-radius:10px;background:rgba(245,179,1,.08);border:1px solid rgba(245,179,1,.22);color:#e8d9a8}
+.ff-note-icon{font-size:18px;color:#f5b301}
 .ff-dl-btn.ff-sent{background:rgba(33,208,122,.14);color:#21d07a;opacity:1}
 .ff-skel{display:block;animation:none}
 .ff-skel-line{height:12px;border-radius:6px;background:linear-gradient(90deg,#22252b 0,#2c3038 50%,#22252b 100%);background-size:200% 100%;animation:ff-shimmer 1.2s linear infinite}

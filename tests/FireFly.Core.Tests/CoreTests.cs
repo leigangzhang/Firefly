@@ -535,6 +535,37 @@ public class DownloadTests
     }
 
     [Fact]
+    public async Task SubmitRefusesNewTitleWhenQuotaIsFull()
+    {
+        using var dir = new TempDir();
+        var store = new JsonStore<TaskList>(System.IO.Path.Combine(dir.Path, "state", "tasks.json"));
+        var quota = new QuotaLedger(new JsonStore<QuotaState>(System.IO.Path.Combine(dir.Path, "state", "quota.json")), LicenseTests.Verifier(out _), () => null, 1);
+        var opened = 0;
+        var downloader = new MacThunderDownloader(() => System.IO.Path.Combine(dir.Path, "dl"), () => Rules, (_, _) => { opened++; return Task.FromResult(0); }, (_, _) => Task.CompletedTask);
+        var app = new FireFlyApp(store, downloader, quota);
+
+        var s1 = new MediaQuery { Kind = MediaKind.Series, Title = "降世神通：七净土", Year = 2026, Season = 1, TmdbId = "1" };
+        await app.SubmitAsync(s1, Movie with { InfoHash = "A1", Magnet = "magnet:?xt=urn:btih:A1" }, default);
+        Assert.Equal(1, quota.Status().Used);
+        Assert.True(quota.IsCounted(s1.QuotaKey));
+
+        // 同一季本月已计过数：额度用满后仍可下载这一季的其他版本，不再扣额度
+        await app.SubmitAsync(s1, Movie with { InfoHash = "A2", Magnet = "magnet:?xt=urn:btih:A2" }, default);
+        Assert.Equal(2, opened);
+        Assert.Equal(1, quota.Status().Used);
+
+        // 额度用满后，没计过数的季和电影都会被拒绝，也不会交给迅雷
+        var s2 = s1 with { Season = 2 };
+        Assert.False(quota.IsCounted(s2.QuotaKey));
+        await Assert.ThrowsAsync<QuotaExceededException>(() => app.SubmitAsync(s2, Movie with { InfoHash = "B1", Magnet = "magnet:?xt=urn:btih:B1" }, default));
+        var movie = new MediaQuery { Kind = MediaKind.Movie, Title = "沙丘", Year = 2021, TmdbId = "438631" };
+        await Assert.ThrowsAsync<QuotaExceededException>(() => app.SubmitAsync(movie, Movie, default));
+        Assert.Equal(2, opened);
+        Assert.Equal(2, app.ListTasks().Count);
+        Assert.Equal(1, quota.Status().Used);
+    }
+
+    [Fact]
     public async Task WatcherCleansReleaseFolderAfterArchive()
     {
         using var dir = new TempDir();

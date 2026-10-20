@@ -22,6 +22,8 @@ public sealed record SearchRequest(string? ItemId, string? Title, string? Origin
 /// <summary>提交下载只带版本 ID（InfoHash），完整版本和磁力由服务端从搜索缓存里找回。</summary>
 public sealed record SubmitRequest(MediaQuery Query, string ReleaseId);
 
+public sealed record QuotaView(bool IsVip, string LicenseStatus, int Used, int FreeLimit, bool Counted);
+
 [ApiController]
 [Route("FireFly")]
 public sealed class FireFlyController : ControllerBase
@@ -354,7 +356,7 @@ public sealed class FireFlyController : ControllerBase
             sourceErrors = result.Errors.Count,
             fromCache = result.FromCache,
             needsFallback = result.NeedsFallback,
-            quota = _runtime.Quota.Status(),
+            quota = QuotaView(result.Query),
         });
     }
 
@@ -371,11 +373,12 @@ public sealed class FireFlyController : ControllerBase
         try
         {
             var task = await _runtime.App.SubmitAsync(request.Query, release, ct).ConfigureAwait(false);
-            return ApiJson(TaskView(task));
+            return ApiJson(new { task = TaskView(task), quota = QuotaView(request.Query) });
         }
-        catch (QuotaExceededException ex)
+        catch (QuotaExceededException)
         {
-            return ApiJson(new { error = ex.Message, quota = ex.Status }, StatusCodes.Status402PaymentRequired);
+            var quota = QuotaView(request.Query);
+            return ApiJson(new { error = $"本月免费额度（{quota.FreeLimit} 部）已用完", quota }, StatusCodes.Status402PaymentRequired);
         }
         catch (InvalidOperationException ex)
         {
@@ -388,6 +391,13 @@ public sealed class FireFlyController : ControllerBase
     public IActionResult Tasks() => ApiJson(_runtime.App.ListTasks().Select(TaskView));
 
     /// <summary>任务列表同样只给干净名称，不带原始发布名和磁力。</summary>
+    /// <summary>额度状态，带上"这部片 / 这一季本月是否已计过数"，前端据此决定额度用满时还能不能下载。</summary>
+    private QuotaView QuotaView(MediaQuery query)
+    {
+        var status = _runtime.Quota.Status();
+        return new QuotaView(status.IsVip, status.LicenseStatus, status.Used, status.FreeLimit, _runtime.Quota.IsCounted(query.QuotaKey));
+    }
+
     private static object TaskView(DownloadTask t) => new
     {
         t.Id,

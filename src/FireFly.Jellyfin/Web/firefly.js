@@ -311,6 +311,13 @@
     if (s.packSlot) s.packSlot.innerHTML = '';
     drawer.quota.innerHTML = '';
     if (r.quota) drawer.quota.appendChild(quotaLine(r.quota));
+    if (quotaFull(r.quota) && r.releases.length) {
+      list.appendChild(el('div', { class: 'ff-note ff-quota-note' }, [icon(r.quota.counted ? 'info' : 'lock', 'ff-note-icon'), el('span', {
+        text: r.quota.counted
+          ? '本月免费额度已用完。' + (r.query.kind === 'Series' ? '这一季' : '这部片') + '本月已计过额度，仍可以下载它的其他版本。'
+          : '本月免费额度（' + r.quota.freeLimit + ' 部）已用完，开通 VIP 后可以继续下载。',
+      })]));
+    }
     if (r.sourceErrors) list.appendChild(el('div', { class: 'ff-note ff-error', text: '部分资源源暂时不可用，结果可能不全，稍后可点右上角刷新' }));
     if (!r.releases.length) {
       emptyState(list.appendChild(el('div')), 'search_off', '没有找到合适的资源', el('div', { class: 'ff-dim ff-small', text: '可以稍后刷新再试，或换一季' }));
@@ -452,20 +459,35 @@
     return list;
   }
 
+  // 额度用满且这部片 / 这一季本月还没计过数时，不能再下载（服务端同样会拒绝）
+  function quotaFull(q) { return !!q && !q.isVip && q.used >= q.freeLimit; }
+  function quotaBlocks(q) { return quotaFull(q) && !q.counted; }
+
+  function quotaExhaustedText(q) { return '本月免费额度（' + q.freeLimit + ' 部）已用完'; }
+
   function releaseCard(r, rel, idx) {
-    var btn = el('button', { class: 'ff-btn ff-dl-btn' }, [icon('download'), el('span', { text: '下载' })]);
+    var locked = !rel.__sent && quotaBlocks(r.quota);
+    var btn = el('button', { class: 'ff-btn ff-dl-btn' + (locked ? ' ff-locked' : ''), title: locked ? quotaExhaustedText(r.quota) : '' },
+      [icon(locked ? 'lock' : 'download'), el('span', { text: locked ? '额度已用完' : '下载' })]);
     if (rel.__sent) markSent(btn);
     btn.addEventListener('click', function () {
       if (rel.__sent) return;
+      if (quotaBlocks(r.quota)) { showVip(quotaExhaustedText(r.quota)); return; }
       btn.disabled = true; btn.lastChild.textContent = '提交中…';
-      api('POST', 'tasks', { query: r.query, releaseId: rel.id }).then(function () {
+      api('POST', 'tasks', { query: r.query, releaseId: rel.id }).then(function (res) {
         rel.__sent = true;
         markSent(btn);
+        if (res && res.quota) updateQuota(r, res.quota);
         toast('已交给迅雷', { label: '查看下载任务', run: showTasks });
         api('GET', 'tasks').then(function (tasks) { if (drawer) { drawer.cache.tasks = tasks; refreshTaskCount(); } }).catch(function () {});
       }).catch(function (e) {
         btn.disabled = false; btn.lastChild.textContent = '下载';
-        if (e.status === 402) showVip(e.message); else toast(e.message, null, true);
+        if (e.status === 402) {
+          if (e.data && e.data.quota) updateQuota(r, e.data.quota);
+          showVip(e.message);
+        } else {
+          toast(e.message, null, true);
+        }
       });
     });
     return el('div', { class: 'ff-rcard', style: 'animation-delay:' + Math.min(idx, 10) * 30 + 'ms' }, [
@@ -479,6 +501,15 @@
       ]),
       btn,
     ]);
+  }
+
+  // 提交成功或被拒后用服务端返回的额度刷新右上角的计数
+  function updateQuota(r, q) {
+    r.quota = q;
+    if (drawer && drawer.search && drawer.search.result === r) {
+      drawer.quota.innerHTML = '';
+      drawer.quota.appendChild(quotaLine(q));
+    }
   }
 
   function markSent(btn) {
