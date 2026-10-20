@@ -1,7 +1,6 @@
 using FireFly.Core;
 using FireFly.Core.Downloads;
 using FireFly.Core.Library;
-using FireFly.Core.Licensing;
 using FireFly.Core.Metadata;
 using FireFly.Core.Rules;
 using FireFly.Core.Sources;
@@ -13,12 +12,6 @@ namespace FireFly.Jellyfin;
 /// <summary>组装根：把 Core 的各个部件按插件配置接起来。整个插件进程只有一份。</summary>
 public sealed class FireFlyRuntime
 {
-    /// <summary>授权公钥（SubjectPublicKeyInfo，base64）。用 tools/FireFly.LicenseTool keygen 生成后填进来；为空时只有免费额度。</summary>
-    public const string LicensePublicKey = "";
-
-    /// <summary>每月免费部数。</summary>
-    public const int FreeMonthlyQuota = 5;
-
     private readonly HttpClient _http;
     private RulesDocument _rules;
     private IReadOnlyList<IResourceSource> _sources;
@@ -38,12 +31,7 @@ public sealed class FireFlyRuntime
         Downloader = new MacThunderDownloader(() => DownloadDir, () => _rules);
         Search = new SearchService(() => _sources, () => _rules, Keywords);
         Tmdb = new TmdbClient(_http, () => (Config.TmdbApiKey.Trim(), string.IsNullOrWhiteSpace(Config.TmdbLanguage) ? "zh-CN" : Config.TmdbLanguage.Trim()));
-        Quota = new QuotaLedger(
-            new JsonStore<QuotaState>(Path.Combine(dataDir, "quota.json")),
-            new LicenseVerifier(LicensePublicKey),
-            () => Config.LicenseCode,
-            FreeMonthlyQuota);
-        App = new FireFlyApp(Tasks, Downloader, Quota);
+        App = new FireFlyApp(Tasks, Downloader);
         Watcher = new DownloadWatcher(Tasks, Downloader, new Archiver(host, () => _rules));
     }
 
@@ -60,8 +48,6 @@ public sealed class FireFlyRuntime
     public SearchService Search { get; }
 
     public TmdbClient Tmdb { get; }
-
-    public QuotaLedger Quota { get; }
 
     public FireFlyApp App { get; }
 

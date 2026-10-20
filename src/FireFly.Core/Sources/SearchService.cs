@@ -56,8 +56,8 @@ public sealed class SearchService
 
     public async Task<SearchResult> SearchAsync(MediaQuery query, bool refresh, SearchStage stage, CancellationToken ct)
     {
-        var fullKey = query.QuotaKey + "|full";
-        var preferredKey = query.QuotaKey + "|preferred";
+        var fullKey = query.TitleKey + "|full";
+        var preferredKey = query.TitleKey + "|preferred";
         if (!refresh && Cached(fullKey) is { } full)
         {
             return full with { FromCache = true, NeedsFallback = false };

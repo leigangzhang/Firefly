@@ -19,6 +19,4 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>发布者关键词，一行一个；空 = 用规则文件默认值。</summary>
     public string PublisherKeywords { get; set; } = string.Empty;
-
-    public string LicenseCode { get; set; } = string.Empty;
 }

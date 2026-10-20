@@ -55,7 +55,6 @@
     var body = el('div', { class: 'ff-dbody' });
     var title = el('div', { class: 'ff-dtitle' });
     var sub = el('div', { class: 'ff-dsub' });
-    var quota = el('div', { class: 'ff-dquota' });
     var refresh = el('button', { class: 'ff-icon-btn', title: '重新搜索', 'aria-label': '重新搜索', style: 'display:none', onclick: function () { if (drawer && drawer.view === 'search') runSearch(true); } }, [icon('refresh')]);
     var backdrop = el('div', { class: 'ff-backdrop', onclick: closeDrawer });
     var panel = el('aside', { class: 'ff-drawer', role: 'dialog', 'aria-modal': 'true' }, [
@@ -69,7 +68,7 @@
     ]);
     var root = el('div', { class: 'ff-drawer-root' }, [backdrop, panel]);
     document.body.appendChild(root);
-    drawer = { root: root, panel: panel, tabs: tabs, body: body, title: title, sub: sub, quota: quota, refresh: refresh, view: null, search: null, cache: {} };
+    drawer = { root: root, panel: panel, tabs: tabs, body: body, title: title, sub: sub, refresh: refresh, view: null, search: null, cache: {} };
     document.addEventListener('keydown', onDrawerKey, true);
     requestAnimationFrame(function () { requestAnimationFrame(function () { root.classList.add('ff-open'); }); });
     return drawer;
@@ -106,8 +105,6 @@
         onclick: function () { if (d.view !== t.key) (t.key === 'tasks' ? showTasks : showSearchView)(); },
       }, [t.label, t.key === 'tasks' ? el('span', { class: 'ff-tab-count', 'data-count': '' }) : null]));
     });
-    // 额度靠右放在标签行里，切到下载任务也一直可见
-    d.tabs.appendChild(d.quota);
     refreshTaskCount();
   }
 
@@ -292,32 +289,12 @@
       .concat([t.hdr, t.codec, t.mediaSource, t.audio, t.subtitles].filter(Boolean).map(function (c) { return el('span', { class: 'ff-chip', text: c }); }));
   }
 
-  function quotaLine(q) {
-    if (q.isVip) return el('div', { class: 'ff-quota' }, [icon('workspace_premium', 'ff-gold'), el('span', { text: q.licenseStatus })]);
-    var pct = q.freeLimit ? Math.min(100, Math.round(q.used * 100 / q.freeLimit)) : 0;
-    return el('div', { class: 'ff-quota' }, [
-      el('span', { class: 'ff-quota-label', text: '本月免费额度' }),
-      el('span', { class: 'ff-quota-short', text: '额度' }),
-      el('div', { class: 'ff-meter' }, [el('div', { class: 'ff-meter-bar' + (pct >= 100 ? ' ff-full' : ''), style: 'width:' + pct + '%' })]),
-      el('span', { class: 'ff-dim', text: q.used + ' / ' + q.freeLimit }),
-    ]);
-  }
-
   function renderReleases(r) {
     var s = drawer.search;
     var list = s.list;
     list.innerHTML = '';
     removeRail();
     if (s.packSlot) s.packSlot.innerHTML = '';
-    drawer.quota.innerHTML = '';
-    if (r.quota) drawer.quota.appendChild(quotaLine(r.quota));
-    if (quotaFull(r.quota) && r.releases.length) {
-      list.appendChild(el('div', { class: 'ff-note ff-quota-note' }, [icon(r.quota.counted ? 'info' : 'lock', 'ff-note-icon'), el('span', {
-        text: r.quota.counted
-          ? '本月免费额度已用完。' + (r.query.kind === 'Series' ? '这一季' : '这部片') + '本月已计过额度，仍可以下载它的其他版本。'
-          : '本月免费额度（' + r.quota.freeLimit + ' 部）已用完，开通 VIP 后可以继续下载。',
-      })]));
-    }
     if (r.sourceErrors) list.appendChild(el('div', { class: 'ff-note ff-error', text: '部分资源源暂时不可用，结果可能不全，稍后可点右上角刷新' }));
     if (!r.releases.length) {
       emptyState(list.appendChild(el('div')), 'search_off', '没有找到合适的资源', el('div', { class: 'ff-dim ff-small', text: '可以稍后刷新再试，或换一季' }));
@@ -459,35 +436,20 @@
     return list;
   }
 
-  // 额度用满且这部片 / 这一季本月还没计过数时，不能再下载（服务端同样会拒绝）
-  function quotaFull(q) { return !!q && !q.isVip && q.used >= q.freeLimit; }
-  function quotaBlocks(q) { return quotaFull(q) && !q.counted; }
-
-  function quotaExhaustedText(q) { return '本月免费额度（' + q.freeLimit + ' 部）已用完'; }
-
   function releaseCard(r, rel, idx) {
-    var locked = !rel.__sent && quotaBlocks(r.quota);
-    var btn = el('button', { class: 'ff-btn ff-dl-btn' + (locked ? ' ff-locked' : ''), title: locked ? quotaExhaustedText(r.quota) : '' },
-      [icon(locked ? 'lock' : 'download'), el('span', { text: locked ? '额度已用完' : '下载' })]);
+    var btn = el('button', { class: 'ff-btn ff-dl-btn' }, [icon('download'), el('span', { text: '下载' })]);
     if (rel.__sent) markSent(btn);
     btn.addEventListener('click', function () {
       if (rel.__sent) return;
-      if (quotaBlocks(r.quota)) { showVip(quotaExhaustedText(r.quota)); return; }
       btn.disabled = true; btn.lastChild.textContent = '提交中…';
       api('POST', 'tasks', { query: r.query, releaseId: rel.id }).then(function (res) {
         rel.__sent = true;
         markSent(btn);
-        if (res && res.quota) updateQuota(r, res.quota);
         toast('已交给迅雷', { label: '查看下载任务', run: showTasks });
         api('GET', 'tasks').then(function (tasks) { if (drawer) { drawer.cache.tasks = tasks; refreshTaskCount(); } }).catch(function () {});
       }).catch(function (e) {
         btn.disabled = false; btn.lastChild.textContent = '下载';
-        if (e.status === 402) {
-          if (e.data && e.data.quota) updateQuota(r, e.data.quota);
-          showVip(e.message);
-        } else {
-          toast(e.message, null, true);
-        }
+        toast(e.message, null, true);
       });
     });
     return el('div', { class: 'ff-rcard', style: 'animation-delay:' + Math.min(idx, 10) * 30 + 'ms' }, [
@@ -503,32 +465,11 @@
     ]);
   }
 
-  // 提交成功或被拒后用服务端返回的额度刷新右上角的计数
-  function updateQuota(r, q) {
-    r.quota = q;
-    if (drawer && drawer.search && drawer.search.result === r) {
-      drawer.quota.innerHTML = '';
-      drawer.quota.appendChild(quotaLine(q));
-    }
-  }
-
   function markSent(btn) {
     btn.disabled = true;
     btn.classList.add('ff-sent');
     btn.firstChild.textContent = 'check';
     btn.lastChild.textContent = '已交给迅雷';
-  }
-
-  function showVip(text) {
-    openDrawer();
-    var content = switchView('vip', '开通 VIP', '本月免费额度已用完');
-    content.appendChild(el('div', { class: 'ff-vip' }, [
-      icon('workspace_premium', 'ff-vip-icon'),
-      el('div', { class: 'ff-vip-title', text: text }),
-      el('p', { text: '开通 VIP 后不限部数。' }),
-      el('p', { class: 'ff-dim', text: '购买后会得到一串授权码，粘贴到 控制台 → 插件 → FireFly 的"授权码"一栏并保存即可。' }),
-      drawer.search ? el('button', { class: 'ff-btn ff-ghost', text: '返回资源版本', onclick: showSearchView }) : null,
-    ]));
   }
 
   // ---------- 下载任务 ----------

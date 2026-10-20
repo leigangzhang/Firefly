@@ -1,8 +1,6 @@
-using System.Security.Cryptography;
 using FireFly.Core;
 using FireFly.Core.Downloads;
 using FireFly.Core.Library;
-using FireFly.Core.Licensing;
 using FireFly.Core.Metadata;
 using FireFly.Core.Models;
 using FireFly.Core.Parsing;
@@ -492,10 +490,9 @@ public class DownloadTests
         var downloads = System.IO.Path.Combine(dir.Path, "dl");
         var host = new FakeHost(System.IO.Path.Combine(dir.Path, "Movies"), System.IO.Path.Combine(dir.Path, "TV"));
         var store = new JsonStore<TaskList>(System.IO.Path.Combine(dir.Path, "state", "tasks.json"));
-        var quota = new QuotaLedger(new JsonStore<QuotaState>(System.IO.Path.Combine(dir.Path, "state", "quota.json")), LicenseTests.Verifier(out _), () => null, 5);
         string? opened = null;
         var downloader = new MacThunderDownloader(() => downloads, () => Rules, (url, _) => { opened = url; return Task.FromResult(0); }, (_, _) => Task.CompletedTask);
-        var app = new FireFlyApp(store, downloader, quota);
+        var app = new FireFlyApp(store, downloader);
         var clock = DateTimeOffset.UtcNow;
         var watcher = new DownloadWatcher(store, downloader, new Archiver(host, () => Rules), now: () => clock);
 
@@ -504,7 +501,6 @@ public class DownloadTests
         Assert.StartsWith("magnet:?xt=urn:btih:H1&dn=", opened);
         Assert.Equal("沙丘 (2021)", Uri.UnescapeDataString(opened!.Split("dn=")[1]));
         Assert.Equal("沙丘 (2021)", task.Release.DisplayName);
-        Assert.Equal(1, quota.Status().Used);
 
         Directory.CreateDirectory(downloads);
         var temp = System.IO.Path.Combine(downloads, "Dune.2021.2160p.mkv.xltd");
@@ -528,41 +524,31 @@ public class DownloadTests
         Assert.True(System.IO.File.Exists(expected));
         Assert.True(System.IO.File.Exists(System.IO.Path.Combine(host.Paths.MovieRoot!, "沙丘 (2021)", "沙丘 (2021).chs.srt")));
         Assert.Equal(1, host.Refreshes);
-
-        // 同一个任务再提交不会重复建任务，也不会重复扣额度
-        await app.SubmitAsync(query, Movie with { InfoHash = "H2", Magnet = "magnet:?xt=urn:btih:H2" }, default);
-        Assert.Equal(1, quota.Status().Used);
     }
 
     [Fact]
-    public async Task SubmitRefusesNewTitleWhenQuotaIsFull()
+    public async Task SubmitHasNoMonthlyLimit()
     {
         using var dir = new TempDir();
         var store = new JsonStore<TaskList>(System.IO.Path.Combine(dir.Path, "state", "tasks.json"));
-        var quota = new QuotaLedger(new JsonStore<QuotaState>(System.IO.Path.Combine(dir.Path, "state", "quota.json")), LicenseTests.Verifier(out _), () => null, 1);
         var opened = 0;
         var downloader = new MacThunderDownloader(() => System.IO.Path.Combine(dir.Path, "dl"), () => Rules, (_, _) => { opened++; return Task.FromResult(0); }, (_, _) => Task.CompletedTask);
-        var app = new FireFlyApp(store, downloader, quota);
+        var app = new FireFlyApp(store, downloader);
 
-        var s1 = new MediaQuery { Kind = MediaKind.Series, Title = "降世神通：七净土", Year = 2026, Season = 1, TmdbId = "1" };
-        await app.SubmitAsync(s1, Movie with { InfoHash = "A1", Magnet = "magnet:?xt=urn:btih:A1" }, default);
-        Assert.Equal(1, quota.Status().Used);
-        Assert.True(quota.IsCounted(s1.QuotaKey));
+        // 不同的片和季连续提交都会交给迅雷，没有部数上限
+        for (var i = 1; i <= 8; i++)
+        {
+            var query = new MediaQuery { Kind = MediaKind.Series, Title = "降世神通：七净土", Year = 2026, Season = i, TmdbId = "1" };
+            await app.SubmitAsync(query, Movie with { InfoHash = "S" + i, Magnet = "magnet:?xt=urn:btih:S" + i }, default);
+        }
 
-        // 同一季本月已计过数：额度用满后仍可下载这一季的其他版本，不再扣额度
-        await app.SubmitAsync(s1, Movie with { InfoHash = "A2", Magnet = "magnet:?xt=urn:btih:A2" }, default);
-        Assert.Equal(2, opened);
-        Assert.Equal(1, quota.Status().Used);
+        Assert.Equal(8, opened);
+        Assert.Equal(8, app.ListTasks().Count);
 
-        // 额度用满后，没计过数的季和电影都会被拒绝，也不会交给迅雷
-        var s2 = s1 with { Season = 2 };
-        Assert.False(quota.IsCounted(s2.QuotaKey));
-        await Assert.ThrowsAsync<QuotaExceededException>(() => app.SubmitAsync(s2, Movie with { InfoHash = "B1", Magnet = "magnet:?xt=urn:btih:B1" }, default));
-        var movie = new MediaQuery { Kind = MediaKind.Movie, Title = "沙丘", Year = 2021, TmdbId = "438631" };
-        await Assert.ThrowsAsync<QuotaExceededException>(() => app.SubmitAsync(movie, Movie, default));
-        Assert.Equal(2, opened);
-        Assert.Equal(2, app.ListTasks().Count);
-        Assert.Equal(1, quota.Status().Used);
+        // 同一个版本还在下载时再次提交，返回已有任务，不重复交给迅雷
+        await app.SubmitAsync(new MediaQuery { Kind = MediaKind.Series, Title = "降世神通：七净土", Year = 2026, Season = 1, TmdbId = "1" }, Movie with { InfoHash = "S1", Magnet = "magnet:?xt=urn:btih:S1" }, default);
+        Assert.Equal(8, opened);
+        Assert.Equal(8, app.ListTasks().Count);
     }
 
     [Fact]
@@ -573,9 +559,8 @@ public class DownloadTests
         var releaseDir = System.IO.Path.Combine(downloads, "Dune.2021.2160p");
         var host = new FakeHost(System.IO.Path.Combine(dir.Path, "Movies"), System.IO.Path.Combine(dir.Path, "TV"));
         var store = new JsonStore<TaskList>(System.IO.Path.Combine(dir.Path, "state", "tasks.json"));
-        var quota = new QuotaLedger(new JsonStore<QuotaState>(System.IO.Path.Combine(dir.Path, "state", "quota.json")), LicenseTests.Verifier(out _), () => null, 5);
         var downloader = new MacThunderDownloader(() => downloads, () => Rules, (_, _) => Task.FromResult(0), (_, _) => Task.CompletedTask);
-        var app = new FireFlyApp(store, downloader, quota);
+        var app = new FireFlyApp(store, downloader);
         var clock = DateTimeOffset.UtcNow;
         var watcher = new DownloadWatcher(store, downloader, new Archiver(host, () => Rules), now: () => clock);
 
@@ -640,58 +625,6 @@ public class DownloadTests
         Assert.Equal(System.IO.Path.Combine("/tv", "王冠 (2016)", "Season 02", "王冠 S02E05.mkv"), LibraryNamer.EpisodeTarget("/tv", q, "/dl/The.Crown.S02E05.1080p.MKV"));
         Assert.Equal(System.IO.Path.Combine("/tv", "王冠 (2016)", "Season 02", "花絮.mkv"), LibraryNamer.EpisodeTarget("/tv", q, "/dl/花絮.mkv"));
         Assert.Equal("A B", LibraryNamer.SafeName("A:/B"));
-    }
-}
-
-public class LicenseTests
-{
-    internal static LicenseVerifier Verifier(out string privateKey, Func<DateTimeOffset>? now = null)
-    {
-        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        privateKey = Convert.ToBase64String(key.ExportPkcs8PrivateKey());
-        return new LicenseVerifier(Convert.ToBase64String(key.ExportSubjectPublicKeyInfo()), now);
-    }
-
-    [Fact]
-    public void IssuedCodeVerifiesAndTamperingFails()
-    {
-        var verifier = Verifier(out var priv);
-        var code = LicenseVerifier.Issue(new LicensePayload { Subject = "buyer-1", Plan = "yearly", Expires = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds() }, priv);
-
-        Assert.True(verifier.Verify(code).IsVip);
-        Assert.False(verifier.Verify(code[..^3] + "AAA").IsVip);
-        Assert.False(verifier.Verify("garbage").IsVip);
-        Assert.False(verifier.Verify(null).IsVip);
-    }
-
-    [Fact]
-    public void ExpiredCodeIsNotVipButLifetimeIs()
-    {
-        var verifier = Verifier(out var priv);
-        var expired = LicenseVerifier.Issue(new LicensePayload { Subject = "b", Plan = "monthly", Expires = DateTimeOffset.UtcNow.AddDays(-1).ToUnixTimeSeconds() }, priv);
-        var lifetime = LicenseVerifier.Issue(new LicensePayload { Subject = "b", Plan = "lifetime", Expires = 0 }, priv);
-
-        Assert.Equal("授权已到期", verifier.Verify(expired).Status);
-        Assert.True(verifier.Verify(lifetime).IsVip);
-    }
-
-    [Fact]
-    public void QuotaCountsDistinctTitlesPerMonthAndResets()
-    {
-        using var dir = new TempDir();
-        var now = new DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.Zero);
-        var ledger = new QuotaLedger(new JsonStore<QuotaState>(System.IO.Path.Combine(dir.Path, "q.json")), Verifier(out _), () => null, 2, () => now);
-
-        ledger.Record("movie:a");
-        ledger.Record("movie:a");
-        ledger.Record("movie:b");
-        Assert.Equal(2, ledger.Status().Used);
-        Assert.True(ledger.CanSubmit("movie:a"));
-        Assert.False(ledger.CanSubmit("movie:c"));
-
-        now = now.AddDays(3);
-        Assert.Equal(0, ledger.Status().Used);
-        Assert.True(ledger.CanSubmit("movie:c"));
     }
 }
 

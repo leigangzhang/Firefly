@@ -34,8 +34,8 @@ public sealed record MediaQuery
     /// <summary>该季在 TMDb 上的集数，用来区分"整季包"和名字只写了季号的分集包；未知为空。</summary>
     public int? SeasonEpisodes { get; init; }
 
-    /// <summary>额度计数用的键：同一部片 / 同一季在一个月内只算一次。</summary>
-    public string QuotaKey =>
+    /// <summary>标识一部片 / 一季的键，用作搜索缓存键。</summary>
+    public string TitleKey =>
         Kind == MediaKind.Movie
             ? $"movie:{TmdbId ?? Title}:{Year}"
             : $"series:{TmdbId ?? Title}:{Year}:s{Season ?? 1}";

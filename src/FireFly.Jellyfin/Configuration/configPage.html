@@ -31,10 +31,6 @@
           <textarea is="emby-textarea" id="PublisherKeywords" label="优选关键词（一行一个）" rows="3"></textarea>
           <div class="fieldDescription">留空使用内置默认，一般无需填写。一行只放一个词。</div>
         </div>
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="LicenseCode" label="授权码" />
-          <div class="fieldDescription">开通 VIP 后获得，以 FF1. 开头。</div>
-        </div>
         <button is="emby-button" type="submit" class="raised button-submit block"><span>保存</span></button>
       </form>
     </div>
@@ -42,7 +38,7 @@
   <script type="text/javascript">
     (function () {
       var pluginId = '4f1d2c8e-9b7a-4e35-8c61-f1ae0f17f1f1';
-      var fields = ['ThunderDownloadDir', 'MovieLibraryPath', 'SeriesLibraryPath', 'TmdbApiKey', 'TmdbLanguage', 'PublisherKeywords', 'LicenseCode'];
+      var fields = ['ThunderDownloadDir', 'MovieLibraryPath', 'SeriesLibraryPath', 'TmdbApiKey', 'TmdbLanguage', 'PublisherKeywords'];
       var page = document.querySelector('#FireFlyConfigPage');
 
       function line(label, value, ok) {
@@ -52,7 +48,6 @@
         ApiClient.ajax({ url: ApiClient.getUrl('FireFly/status'), type: 'GET', dataType: 'json' }).then(function (s) {
           page.querySelector('#ffStatus').innerHTML =
             line('版本', s.version) +
-            line('授权', s.vip ? s.license : '免费版（本月已用 ' + s.used + ' / ' + s.freeLimit + ' 部）· ' + s.license) +
             line('下载目录', s.downloadDir + (s.downloadDirExists ? '' : '（不存在，请创建并在迅雷里设置）'), s.downloadDirExists) +
             line('电影库', (s.movieRoot || '未找到') + (s.sameVolumeMovie === false ? '（与下载目录不在同一磁盘，入库会变成复制）' : ''), !!s.movieRoot) +
             line('剧集库', (s.seriesRoot || '未找到') + (s.sameVolumeSeries === false ? '（与下载目录不在同一磁盘，入库会变成复制）' : ''), !!s.seriesRoot) +

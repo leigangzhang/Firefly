@@ -8,9 +8,8 @@
 ## 目录结构
 
 ```
-src/FireFly.Core/           业务核心（不引用 Jellyfin）：搜索源、标题解析、迅雷驱动、下载监控、归档、授权与额度
+src/FireFly.Core/           业务核心（不引用 Jellyfin）：搜索源、标题解析、迅雷驱动、下载监控、归档
 src/FireFly.Jellyfin/       Jellyfin 插件：网页注入、/FireFly/* 接口、后台监控、配置页、前端
-tools/FireFly.LicenseTool/  生成密钥对、签发授权码（只在作者电脑上用）
 tests/FireFly.Core.Tests/   Core 单元测试
 build.sh                    构建并打包 → out/FireFly_<版本>.zip
 make-repo.sh                生成 Jellyfin 插件库（manifest.json + zip）
@@ -92,9 +91,8 @@ cd out/repo && python3 -m http.server 8765         # 保持这个终端开着
 | 电影库目录 / 剧集库目录 | 留空时自动使用 Jellyfin 第一个"电影"/"节目"媒体库。最好与下载目录在同一块磁盘，入库时就是瞬间完成的移动；不在同一块磁盘时会变成复制 |
 | TMDb API Key | 用于热门榜单和资源详情页，在 themoviedb.org 账号设置 → API 里免费申请 |
 | 发布者关键词 | 留空使用内置默认（高清剧集网、高清影视之家：前者发剧集、后者发电影；DDHDTV 等各分站的发布名都带这两个词），一行一个词 |
-| 授权码 | VIP 授权码，以 `FF1.` 开头；不填则每月免费 5 部 |
 
-页面顶部的状态区会显示：版本、授权、下载目录是否存在、媒体库路径、是否在同一块磁盘、数据目录。全部正常后再开始使用。
+页面顶部的状态区会显示：版本、下载目录是否存在、媒体库路径、是否在同一块磁盘、数据目录。全部正常后再开始使用。
 
 ### 6. 使用
 
@@ -112,7 +110,7 @@ cd out/repo && python3 -m http.server 8765         # 保持这个终端开着
 
 ### 8. 卸载
 
-控制台 → 插件 → FireFly → 卸载 → 重启 Jellyfin。下载任务和额度记录保存在配置页显示的"数据目录"里，需要彻底清除时手动删除该目录即可。
+控制台 → 插件 → FireFly → 卸载 → 重启 Jellyfin。下载任务和收藏保存在配置页显示的"数据目录"里，需要彻底清除时手动删除该目录即可。
 
 ### 9. 常见问题
 
@@ -142,22 +140,10 @@ M2 实测方法：下载过程中执行 `ls -laR ~/Downloads/FireFly`，记录�
 
 ---
 
-## 授权码
-
-```bash
-cd tools/FireFly.LicenseTool
-dotnet run -f net9.0 -- keygen                       # 生成 keys/private.key（保密，已在 .gitignore 中）并打印公钥
-dotnet run -f net9.0 -- issue 买家标识 yearly         # 签发授权码：monthly / yearly / lifetime
-dotnet run -f net9.0 -- verify <授权码> <公钥>         # 验证
-```
-
-把公钥填进 `src/FireFly.Jellyfin/FireFlyRuntime.cs` 的 `LicensePublicKey` 后再发版。公钥为空时，插件只提供每月免费额度（`FreeMonthlyQuota`，当前为 5 部）。**私钥一旦丢失或更换，已经卖出的授权码会全部失效，请备份。**
-
 ## 运行数据
 
 插件配置页的"数据目录"一栏显示实际路径，其中：
 
 - `tasks.json`：下载任务；
-- `quota.json`：月度额度；
 - `favorites.json`：收藏；
 - `rules.json`（可选）：覆盖内置规则，版本号不低于内置版本时生效。
