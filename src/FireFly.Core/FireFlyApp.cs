@@ -1,6 +1,7 @@
 using FireFly.Core.Downloads;
 using FireFly.Core.Licensing;
 using FireFly.Core.Models;
+using FireFly.Core.Parsing;
 using FireFly.Core.Storage;
 
 namespace FireFly.Core;
@@ -43,6 +44,9 @@ public sealed class FireFlyApp
             throw new QuotaExceededException(_quota.Status());
         }
 
+        // 交给迅雷的磁力只带干净的显示名，不带发布站信息
+        var displayName = ReleaseDisplay.Name(query, release);
+        release = release with { DisplayName = displayName, Magnet = ReleaseDisplay.WithDisplayName(release.Magnet, displayName) };
         await _downloader.SubmitAsync(release, ct).ConfigureAwait(false);
         _quota.Record(query.QuotaKey);
 

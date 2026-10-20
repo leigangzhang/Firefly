@@ -52,6 +52,9 @@ public sealed record Release
     public string Source { get; init; } = string.Empty;
 
     public ReleaseTraits Traits { get; init; } = new();
+
+    /// <summary>提交下载时生成的干净名称（见 ReleaseDisplay），展示用；Name 保留原始发布名供匹配文件。</summary>
+    public string? DisplayName { get; init; }
 }
 
 /// <summary>从标题里解析出的展示字段。只用于展示、过滤和排序，不打分。</summary>

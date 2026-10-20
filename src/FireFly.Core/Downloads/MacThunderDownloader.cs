@@ -122,8 +122,12 @@ public sealed class MacThunderDownloader : IDownloader
     /// <summary>没有文件清单：找与种子同名的文件夹或文件，里面的视频文件就是目标。</summary>
     internal static DownloadProgress ProbeByReleaseName(Release release, IReadOnlyList<FileInfo> files, RulesDocument rules)
     {
-        var name = release.Name.Trim();
-        var related = files.Where(f => f.FullName.Contains(Path.DirectorySeparatorChar + name, StringComparison.Ordinal)).ToList();
+        // 迅雷可能用种子里的原名，也可能用磁力里的显示名建目录，两个都认
+        var names = new[] { release.Name, release.DisplayName }
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => Path.DirectorySeparatorChar + n!.Trim())
+            .ToList();
+        var related = files.Where(f => names.Any(n => f.FullName.Contains(n, StringComparison.Ordinal))).ToList();
         var hasTemp = related.Any(f => rules.Thunder.TempSuffixes.Any(s => f.Name.EndsWith(s, StringComparison.OrdinalIgnoreCase)));
         var videos = related.Where(f => rules.IsVideo(f.Name) && f.Length >= rules.MinVideoBytes).ToList();
         var done = related.Sum(f => f.Length);

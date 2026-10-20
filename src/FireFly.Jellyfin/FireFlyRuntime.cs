@@ -34,6 +34,7 @@ public sealed class FireFlyRuntime
 
         Host = host;
         Tasks = new JsonStore<TaskList>(Path.Combine(dataDir, "tasks.json"));
+        Favorites = new Favorites(new JsonStore<FavoriteList>(Path.Combine(dataDir, "favorites.json")));
         Downloader = new MacThunderDownloader(() => DownloadDir, () => _rules);
         Search = new SearchService(() => _sources, () => _rules, Keywords);
         Tmdb = new TmdbClient(_http, () => (Config.TmdbApiKey.Trim(), string.IsNullOrWhiteSpace(Config.TmdbLanguage) ? "zh-CN" : Config.TmdbLanguage.Trim()));
@@ -51,6 +52,8 @@ public sealed class FireFlyRuntime
     public IMediaHost Host { get; }
 
     public JsonStore<TaskList> Tasks { get; }
+
+    public Favorites Favorites { get; }
 
     public MacThunderDownloader Downloader { get; }
 

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FireFly.Core.Models;
 
 namespace FireFly.Core.Rules;
 
@@ -20,6 +21,9 @@ public sealed class RulesDocument
     public List<string> SubtitleExtensions { get; set; } = new();
 
     public long MinVideoBytes { get; set; }
+
+    /// <summary>热门榜单的筛选项目录（分类、地区、出品、分级）。TMDb 的公司 / 电视网 ID 写错时改这里即可。</summary>
+    public DiscoverRule Discover { get; set; } = new();
 
     public bool IsVideo(string path) =>
         VideoExtensions.Contains(System.IO.Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
@@ -49,6 +53,45 @@ public sealed class ThunderRule
 {
     public List<string> TempSuffixes { get; set; } = new();
 }
+
+public sealed class DiscoverRule
+{
+    public List<DiscoverCategory> Categories { get; set; } = new();
+
+    public List<FilterOption> Regions { get; set; } = new();
+
+    /// <summary>电影的"出品"：TMDb 制片公司（with_companies）。</summary>
+    public List<FilterOption> Companies { get; set; } = new();
+
+    /// <summary>剧集的"出品"：TMDb 电视网 / 平台（with_networks）。</summary>
+    public List<FilterOption> Networks { get; set; } = new();
+
+    public string CertificationCountry { get; set; } = "US";
+
+    public List<FilterOption> Certifications { get; set; } = new();
+
+    /// <summary>详情页"播放平台"依次尝试的地区。</summary>
+    public List<string> WatchRegions { get; set; } = new() { "CN", "US" };
+}
+
+public sealed class DiscoverCategory
+{
+    public string Key { get; set; } = string.Empty;
+
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>TMDb 路径段：movie 或 tv。</summary>
+    public string Segment { get; set; } = "movie";
+
+    /// <summary>分类自带的类型限制，如动漫 = 16；"|" 表示或，"," 表示且。</summary>
+    public string? WithGenres { get; set; }
+
+    public string? WithoutGenres { get; set; }
+
+    public MediaKind Kind => Segment == "tv" ? MediaKind.Series : MediaKind.Movie;
+}
+
+public sealed record FilterOption(string Value, string Label);
 
 public static class RulesLoader
 {
@@ -84,7 +127,17 @@ public static class RulesLoader
         try
         {
             var custom = JsonSerializer.Deserialize<RulesDocument>(File.ReadAllText(overridePath), Options);
-            return custom is not null && custom.Version >= builtin.Version && custom.Sources.Count > 0 ? custom : builtin;
+            if (custom is null || custom.Version < builtin.Version || custom.Sources.Count == 0)
+            {
+                return builtin;
+            }
+
+            if (custom.Discover.Categories.Count == 0)
+            {
+                custom.Discover = builtin.Discover;
+            }
+
+            return custom;
         }
         catch (JsonException)
         {

@@ -1,21 +1,259 @@
 {
-  "version": 1,
-  "updatedAt": "2026-10-19",
+  "version": 2,
+  "updatedAt": "2026-10-20",
   "sources": [
     {
       "name": "diao.im",
       "kind": "diao",
-      "endpoints": ["https://m.diao.im/api/search"],
+      "endpoints": [
+        "https://m.diao.im/api/search"
+      ],
       "pageSize": 10,
       "maxPages": 3,
       "enabled": true
     }
   ],
-  "publisherKeywords": ["DDHDTV", "高清剧集网"],
+  "publisherKeywords": [
+    "DDHDTV",
+    "高清剧集网"
+  ],
   "thunder": {
-    "tempSuffixes": [".xltd", ".td", ".td.cfg", ".bt.xltd"]
+    "tempSuffixes": [
+      ".xltd",
+      ".td",
+      ".td.cfg",
+      ".bt.xltd"
+    ]
   },
-  "videoExtensions": [".mkv", ".mp4", ".ts", ".m2ts", ".avi", ".mov", ".wmv", ".iso", ".rmvb", ".flv", ".webm"],
-  "subtitleExtensions": [".srt", ".ass", ".ssa", ".sup", ".vtt"],
-  "minVideoBytes": 52428800
+  "videoExtensions": [
+    ".mkv",
+    ".mp4",
+    ".ts",
+    ".m2ts",
+    ".avi",
+    ".mov",
+    ".wmv",
+    ".iso",
+    ".rmvb",
+    ".flv",
+    ".webm"
+  ],
+  "subtitleExtensions": [
+    ".srt",
+    ".ass",
+    ".ssa",
+    ".sup",
+    ".vtt"
+  ],
+  "minVideoBytes": 52428800,
+  "discover": {
+    "categories": [
+      {
+        "key": "movie",
+        "label": "电影",
+        "segment": "movie"
+      },
+      {
+        "key": "tv",
+        "label": "剧集",
+        "segment": "tv",
+        "withoutGenres": "16,99,10762,10763,10764,10767"
+      },
+      {
+        "key": "anime",
+        "label": "动漫",
+        "segment": "tv",
+        "withGenres": "16"
+      },
+      {
+        "key": "documentary",
+        "label": "纪录片",
+        "segment": "tv",
+        "withGenres": "99"
+      },
+      {
+        "key": "variety",
+        "label": "综艺",
+        "segment": "tv",
+        "withGenres": "10764|10767"
+      }
+    ],
+    "regions": [
+      {
+        "value": "CN",
+        "label": "中国大陆"
+      },
+      {
+        "value": "HK",
+        "label": "中国香港"
+      },
+      {
+        "value": "TW",
+        "label": "中国台湾"
+      },
+      {
+        "value": "US",
+        "label": "美国"
+      },
+      {
+        "value": "GB",
+        "label": "英国"
+      },
+      {
+        "value": "JP",
+        "label": "日本"
+      },
+      {
+        "value": "KR",
+        "label": "韩国"
+      },
+      {
+        "value": "FR",
+        "label": "法国"
+      },
+      {
+        "value": "DE",
+        "label": "德国"
+      },
+      {
+        "value": "TH",
+        "label": "泰国"
+      },
+      {
+        "value": "IN",
+        "label": "印度"
+      },
+      {
+        "value": "ES",
+        "label": "西班牙"
+      }
+    ],
+    "companies": [
+      {
+        "value": "174",
+        "label": "华纳兄弟"
+      },
+      {
+        "value": "33",
+        "label": "环球影业"
+      },
+      {
+        "value": "4",
+        "label": "派拉蒙"
+      },
+      {
+        "value": "2",
+        "label": "迪士尼"
+      },
+      {
+        "value": "5",
+        "label": "哥伦比亚"
+      },
+      {
+        "value": "420",
+        "label": "漫威影业"
+      },
+      {
+        "value": "3",
+        "label": "皮克斯"
+      },
+      {
+        "value": "521",
+        "label": "梦工厂动画"
+      },
+      {
+        "value": "41077",
+        "label": "A24"
+      },
+      {
+        "value": "1632",
+        "label": "狮门影业"
+      },
+      {
+        "value": "10342",
+        "label": "吉卜力工作室"
+      },
+      {
+        "value": "882",
+        "label": "东宝"
+      }
+    ],
+    "networks": [
+      {
+        "value": "213",
+        "label": "Netflix"
+      },
+      {
+        "value": "49",
+        "label": "HBO"
+      },
+      {
+        "value": "2739",
+        "label": "Disney+"
+      },
+      {
+        "value": "2552",
+        "label": "Apple TV+"
+      },
+      {
+        "value": "1024",
+        "label": "Prime Video"
+      },
+      {
+        "value": "453",
+        "label": "Hulu"
+      },
+      {
+        "value": "2007",
+        "label": "腾讯视频"
+      },
+      {
+        "value": "1330",
+        "label": "爱奇艺"
+      },
+      {
+        "value": "1419",
+        "label": "优酷"
+      },
+      {
+        "value": "1631",
+        "label": "芒果TV"
+      },
+      {
+        "value": "1605",
+        "label": "哔哩哔哩"
+      },
+      {
+        "value": "952",
+        "label": "湖南卫视"
+      }
+    ],
+    "certificationCountry": "US",
+    "certifications": [
+      {
+        "value": "G",
+        "label": "G 全年龄"
+      },
+      {
+        "value": "PG",
+        "label": "PG 家长指导"
+      },
+      {
+        "value": "PG-13",
+        "label": "PG-13 13岁以上"
+      },
+      {
+        "value": "R",
+        "label": "R 限制级"
+      },
+      {
+        "value": "NC-17",
+        "label": "NC-17 17岁以下禁止"
+      }
+    ],
+    "watchRegions": [
+      "CN",
+      "US"
+    ]
+  }
 }

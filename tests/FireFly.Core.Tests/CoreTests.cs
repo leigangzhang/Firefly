@@ -3,6 +3,7 @@ using FireFly.Core;
 using FireFly.Core.Downloads;
 using FireFly.Core.Library;
 using FireFly.Core.Licensing;
+using FireFly.Core.Metadata;
 using FireFly.Core.Models;
 using FireFly.Core.Parsing;
 using FireFly.Core.Rules;
@@ -204,6 +205,18 @@ public class DownloadTests
     };
 
     [Fact]
+    public void ProbeByNameAcceptsDisplayNameFolder()
+    {
+        using var dir = new TempDir();
+        var video = dir.File(System.IO.Path.Combine("沙丘 (2021) 2160p", "a.mkv"), 100 * Mb);
+        var release = Movie with { Files = Array.Empty<ReleaseFile>(), SizeBytes = 100 * Mb, DisplayName = "沙丘 (2021) 2160p" };
+        var files = new[] { new FileInfo(video) };
+        var p = MacThunderDownloader.ProbeByReleaseName(release, files, Rules);
+        Assert.True(p.Complete);
+        Assert.False(MacThunderDownloader.ProbeByReleaseName(release with { DisplayName = null }, files, Rules).Complete);
+    }
+
+    [Fact]
     public void ProbeSeesTempFileThenCompletedFile()
     {
         using var dir = new TempDir();
@@ -265,7 +278,9 @@ public class DownloadTests
 
         var query = new MediaQuery { Kind = MediaKind.Movie, Title = "沙丘", Year = 2021, TmdbId = "438631" };
         var task = await app.SubmitAsync(query, Movie, default);
-        Assert.Equal("magnet:?xt=urn:btih:H1", opened);
+        Assert.StartsWith("magnet:?xt=urn:btih:H1&dn=", opened);
+        Assert.Equal("沙丘 (2021)", Uri.UnescapeDataString(opened!.Split("dn=")[1]));
+        Assert.Equal("沙丘 (2021)", task.Release.DisplayName);
         Assert.Equal(1, quota.Status().Used);
 
         Directory.CreateDirectory(downloads);
@@ -423,5 +438,270 @@ public class LicenseTests
         now = now.AddDays(3);
         Assert.Equal(0, ledger.Status().Used);
         Assert.True(ledger.CanSubmit("movie:c"));
+    }
+}
+
+public class DiscoverTests
+{
+    private static readonly DiscoverRule Rule = RulesLoader.LoadDefault().Discover;
+    private static readonly DateOnly Today = new(2026, 10, 20);
+
+    [Fact]
+    public void DefaultRulesCarryDiscoverCatalog()
+    {
+        Assert.Contains(Rule.Categories, c => c.Key == "movie" && c.Kind == MediaKind.Movie);
+        Assert.Contains(Rule.Categories, c => c.Key == "anime" && c.Kind == MediaKind.Series && c.WithGenres == "16");
+        Assert.NotEmpty(Rule.Regions);
+        Assert.NotEmpty(Rule.Companies);
+        Assert.NotEmpty(Rule.Networks);
+        Assert.NotEmpty(Rule.Certifications);
+    }
+
+    [Fact]
+    public void MovieFiltersMapToDiscoverParameters()
+    {
+        var plan = DiscoverPlanner.Plan(Rule, new DiscoverSelection("movie", "35", "CN", "2010-2019", "174", "top", "PG-13", 3), Today);
+        Assert.Equal("/discover/movie", plan.Path);
+        var p = plan.Parameters;
+        Assert.Equal("35", p["with_genres"]);
+        Assert.Equal("CN", p["with_origin_country"]);
+        Assert.Equal("2010-01-01", p["primary_release_date.gte"]);
+        Assert.Equal("2019-12-31", p["primary_release_date.lte"]);
+        Assert.Equal("174", p["with_companies"]);
+        Assert.Equal("US", p["certification_country"]);
+        Assert.Equal("PG-13", p["certification"]);
+        Assert.Equal("vote_average.desc", p["sort_by"]);
+        Assert.Equal("3", p["page"]);
+    }
+
+    [Fact]
+    public void SeriesCategoriesUseNetworksAndIgnoreRating()
+    {
+        var plan = DiscoverPlanner.Plan(Rule, new DiscoverSelection("anime", "10759", null, "2025", "213", "new", "R"), Today);
+        Assert.Equal("/discover/tv", plan.Path);
+        var p = plan.Parameters;
+        Assert.Equal("16,10759", p["with_genres"]);
+        Assert.Equal("213", p["with_networks"]);
+        Assert.False(p.ContainsKey("certification"));
+        Assert.Equal("2025-01-01", p["first_air_date.gte"]);
+        Assert.Equal("2025-12-31", p["first_air_date.lte"]);
+        Assert.Equal("first_air_date.desc", p["sort_by"]);
+    }
+
+    [Fact]
+    public void NewestOnlyShowsReleasedTitles()
+    {
+        var p = DiscoverPlanner.Plan(Rule, new DiscoverSelection("movie", Time: "2026", Sort: "new"), Today).Parameters;
+        Assert.Equal("2026-10-20", p["primary_release_date.lte"]);
+        var tv = DiscoverPlanner.Plan(Rule, new DiscoverSelection("tv"), Today).Parameters;
+        Assert.Equal("popularity.desc", tv["sort_by"]);
+        Assert.Contains("16", tv["without_genres"]);
+    }
+
+    [Fact]
+    public void HotSeriesUseRecentWindowButExplicitTimeWins()
+    {
+        var tv = DiscoverPlanner.Plan(Rule, new DiscoverSelection("tv"), Today).Parameters;
+        Assert.Equal("popularity.desc", tv["sort_by"]);
+        Assert.Equal("2024-01-01", tv["first_air_date.gte"]);
+        Assert.Equal("2026-10-20", tv["first_air_date.lte"]);
+
+        var old = DiscoverPlanner.Plan(Rule, new DiscoverSelection("documentary", Time: "2010-2019", Sort: "hot"), Today).Parameters;
+        Assert.Equal("2010-01-01", old["first_air_date.gte"]);
+        Assert.Equal("2019-12-31", old["first_air_date.lte"]);
+
+        var movie = DiscoverPlanner.Plan(Rule, new DiscoverSelection("movie"), Today).Parameters;
+        Assert.False(movie.ContainsKey("primary_release_date.gte"));
+    }
+
+    [Fact]
+    public void TimeOptionsAndRows()
+    {
+        var times = DiscoverPlanner.TimeOptions(2026).Select(o => o.Value).ToList();
+        Assert.Equal(new[] { "2026", "2025", "2024", "2023", "2022", "2021", "2020", "2010-2019", "2000-2009", "1990-1999", "-1989" }, times);
+        Assert.Equal((null, 1989), DiscoverPlanner.ParseTime("-1989"));
+
+        var genres = new[] { new FilterOption("16", "动画"), new FilterOption("18", "剧情") };
+        var movieRows = DiscoverPlanner.Rows(Rule, DiscoverPlanner.Category(Rule, "movie"), genres, 2026);
+        Assert.Equal(new[] { "category", "genre", "region", "time", "company", "sort", "rating" }, movieRows.Select(r => r.Key));
+        var animeRows = DiscoverPlanner.Rows(Rule, DiscoverPlanner.Category(Rule, "anime"), genres, 2026);
+        Assert.DoesNotContain(animeRows, r => r.Key == "rating");
+        Assert.Equal(new[] { "18" }, animeRows.Single(r => r.Key == "genre").Options.Select(o => o.Value));
+        Assert.Equal(Rule.Networks, animeRows.Single(r => r.Key == "company").Options);
+    }
+
+    [Fact]
+    public void ParsesMovieDetail()
+    {
+        const string json = """
+        {"id":27205,"title":"盗梦空间","original_title":"Inception","original_language":"en","release_date":"2010-07-15",
+         "overview":"简介","tagline":"梦境","poster_path":"/p.jpg","backdrop_path":"/b.jpg","vote_average":8.4,"vote_count":36000,
+         "runtime":148,"status":"Released","genres":[{"id":28,"name":"动作"},{"id":878,"name":"科幻"}],"budget":160000000,"revenue":839000000,
+         "production_companies":[{"name":"Legendary Pictures","logo_path":"/l.png"}],"production_countries":[{"iso_3166_1":"US"}],
+         "videos":{"results":[{"key":"t1","site":"YouTube","type":"Teaser","name":"先导","iso_639_1":"en"},{"key":"t2","site":"YouTube","type":"Trailer","name":"预告","iso_639_1":"en"},{"key":"v","site":"Vimeo","type":"Trailer","name":"x"}]},
+         "credits":{"cast":[{"name":"莱昂纳多","character":"柯布","profile_path":"/c.jpg"}],"crew":[{"name":"诺兰","job":"Director"},{"name":"诺兰","job":"Writer"},{"name":"某人","job":"Editor"}]},
+         "release_dates":{"results":[{"iso_3166_1":"US","release_dates":[{"certification":""},{"certification":"PG-13"}]}]},
+         "watch/providers":{"results":{"US":{"link":"https://tmdb/w","flatrate":[{"provider_name":"Netflix","logo_path":"/n.png"}],"rent":[{"provider_name":"Apple TV"}]}}}}
+        """;
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var d = TmdbClient.ParseDetail(MediaKind.Movie, doc.RootElement, new[] { "CN", "US" });
+        Assert.Equal("27205", d.TmdbId);
+        Assert.Equal("Inception", d.OriginalTitle);
+        Assert.Equal(2010, d.Year);
+        Assert.Equal(148, d.Runtime);
+        Assert.Equal("PG-13", d.Certification);
+        Assert.Equal(new[] { "动作", "科幻" }, d.Genres);
+        Assert.Equal("导演 / 编剧", d.Directors.Single().Role);
+        Assert.Equal("柯布", d.Cast.Single().Role);
+        Assert.Equal(new[] { "t2", "t1" }, d.Videos.Select(v => v.Key));
+        Assert.Equal("https://image.tmdb.org/t/p/w1280/b.jpg", d.BackdropUrl);
+        Assert.Equal("US", d.Providers!.Region);
+        Assert.Equal("Netflix", d.Providers.Stream.Single().Name);
+        Assert.Single(d.Providers.Rent);
+        Assert.Equal("Legendary Pictures", d.Companies.Single().Name);
+        Assert.Equal(new[] { "US" }, d.Countries);
+    }
+
+    [Fact]
+    public void ParsesSeriesDetail()
+    {
+        const string json = """
+        {"id":4614,"name":"海军罪案调查处","original_name":"NCIS","first_air_date":"2003-09-23","status":"Returning Series",
+         "episode_run_time":[],"number_of_seasons":23,"number_of_episodes":500,"origin_country":["US"],
+         "created_by":[{"name":"Donald P. Bellisario"}],"networks":[{"name":"CBS","logo_path":"/cbs.png"}],
+         "aggregate_credits":{"cast":[{"name":"Mark Harmon","roles":[{"character":"Gibbs"}],"total_episode_count":436}]},
+         "content_ratings":{"results":[{"iso_3166_1":"US","rating":"TV-14"}]},
+         "last_episode_to_air":{"season_number":1,"episode_number":23},
+         "seasons":[{"season_number":0,"name":"特别篇","episode_count":3},{"season_number":1,"name":"第 1 季","episode_count":23,"air_date":"2003-09-23","overview":"季简介","vote_average":7.1},{"season_number":2,"name":"第 2 季","episode_count":10,"air_date":"2099-01-01"}]}
+        """;
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var d = TmdbClient.ParseDetail(MediaKind.Series, doc.RootElement, new[] { "CN", "US" });
+        Assert.Equal("NCIS", d.OriginalTitle);
+        Assert.Null(d.Runtime);
+        Assert.Equal("TV-14", d.Certification);
+        Assert.Equal("主创", d.Directors.Single().Role);
+        Assert.Equal(436, d.Cast.Single().Episodes);
+        Assert.Equal("Gibbs", d.Cast.Single().Role);
+        Assert.Equal("CBS", d.Networks.Single().Name);
+        Assert.Equal(new[] { 1, 2 }, d.Seasons.Select(x => x.Number));
+        Assert.Equal(7.1, d.Seasons[0].Rating);
+        Assert.Equal("季简介", d.Seasons[0].Overview);
+        Assert.Equal(1, d.CurrentSeason);
+        Assert.Null(d.Providers);
+    }
+}
+
+public class ReleaseDisplayTests
+{
+    private static Release Rel(string name, int res = 1080, string? source = "WEB-DL") =>
+        new() { InfoHash = "H", Name = name, Magnet = "magnet:?xt=urn:btih:H&dn=" + Uri.EscapeDataString(name) + "&tr=udp%3A%2F%2Ft", Traits = new ReleaseTraits { Resolution = res, MediaSource = source } };
+
+    [Theory]
+    [InlineData("【高清剧集网发布 www.BTHDTV.com】牵牛和仙女[全12集][简繁英字幕].Head.Over.Heels.S01.2025.1080p", "牵牛和仙女 S01 全12集")]
+    [InlineData("【高清剧集网发布 www.BPHDTV.com】牵牛和仙女[第08-10集][简繁英字幕].Head.Over.Heels.S01", "牵牛和仙女 S01 第08-10集")]
+    [InlineData("Head.Over.Heels.S01E05-E08.1080p", "牵牛和仙女 S01 第05-08集")]
+    [InlineData("牵牛和仙女 第3集 www.xx.com", "牵牛和仙女 S01 第03集")]
+    [InlineData("牵牛和仙女.1080p", "牵牛和仙女 S01")]
+    public void SeriesNamesDropSourceInfo(string raw, string expected)
+    {
+        var query = new MediaQuery { Kind = MediaKind.Series, Title = "牵牛和仙女", Year = 2025, Season = 1 };
+        Assert.Equal(expected, ReleaseDisplay.Name(query, Rel(raw)));
+    }
+
+    [Fact]
+    public void MovieNameAndMagnetDn()
+    {
+        var query = new MediaQuery { Kind = MediaKind.Movie, Title = "沙丘", Year = 2021 };
+        var rel = Rel("沙丘.6v电影 地址发布页 www.6v123.com", 2160) with { Traits = new ReleaseTraits { Resolution = 2160, Hdr = "HDR" } };
+        var name = ReleaseDisplay.Name(query, rel);
+        Assert.Equal("沙丘 (2021)", name);
+
+        var magnet = ReleaseDisplay.WithDisplayName(rel.Magnet, name);
+        Assert.Equal("magnet:?xt=urn:btih:H&dn=" + Uri.EscapeDataString(name) + "&tr=udp%3A%2F%2Ft", magnet);
+        Assert.DoesNotContain("6v123", magnet);
+        Assert.Equal("magnet:?xt=urn:btih:X&dn=a", ReleaseDisplay.WithDisplayName("magnet:?xt=urn:btih:X", "a"));
+    }
+}
+
+public class TitleSearchTests
+{
+    [Fact]
+    public void SearchKeepsMoviesAndSeriesOnly()
+    {
+        const string json = """
+        {"page":1,"total_pages":2,"total_results":30,"results":[
+          {"id":1,"media_type":"movie","title":"沙丘","release_date":"2021-09-15","vote_average":7.8},
+          {"id":2,"media_type":"person","name":"某演员"},
+          {"id":3,"media_type":"tv","name":"沙丘：预言","first_air_date":"2024-11-17"}]}
+        """;
+        var page = System.Text.Json.JsonSerializer.Deserialize<TmdbClient.TmdbPage>(json, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        var result = TmdbClient.ToSearchPage(page);
+        Assert.Equal(2, result.TotalPages);
+        Assert.Equal(new[] { ("1", MediaKind.Movie, 2021), ("3", MediaKind.Series, 2024) }, result.Items.Select(i => (i.TmdbId, i.Kind, i.Year ?? 0)));
+        Assert.Equal("沙丘：预言", result.Items[1].Title);
+    }
+}
+
+public class SeasonTests
+{
+    private static TmdbEpisodeBrief? Parse(string json, string today)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        return TmdbClient.ParseSeasonLatest(doc.RootElement, 8, DateOnly.Parse(today));
+    }
+
+    private const string Season8 = """
+    {"episodes":[{"episode_number":1,"name":"临冬城","air_date":"2019-04-14","episode_type":"standard"},
+                 {"episode_number":6,"name":"铁王座","air_date":"2019-05-19","episode_type":"finale"},
+                 {"episode_number":5,"name":"钟声","air_date":"2019-05-12","episode_type":"standard"}]}
+    """;
+
+    [Fact]
+    public void FinishedSeasonShowsFinale()
+    {
+        var e = Parse(Season8, "2026-10-20")!;
+        Assert.Equal((8, 6, "铁王座", "2019-05-19"), (e.Season, e.Episode, e.Name, e.AirDate));
+        Assert.True(e.IsFinale);
+        Assert.True(e.Aired);
+    }
+
+    [Fact]
+    public void AiringSeasonShowsLatestAiredEpisode()
+    {
+        var e = Parse(Season8, "2019-05-13")!;
+        Assert.Equal(5, e.Episode);
+        Assert.False(e.IsFinale);
+        Assert.Equal(2, e.AiredCount);
+    }
+
+    [Fact]
+    public void UpcomingSeasonShowsFirstEpisode()
+    {
+        var e = Parse(Season8, "2019-01-01")!;
+        Assert.Equal(1, e.Episode);
+        Assert.False(e.Aired);
+        Assert.Null(Parse("""{"episodes":[]}""", "2019-01-01"));
+    }
+}
+
+public class FavoriteTests
+{
+    [Fact]
+    public void AddDedupesAndRemoves()
+    {
+        using var dir = new TempDir();
+        var path = System.IO.Path.Combine(dir.Path, "favorites.json");
+        var favorites = new Favorites(new JsonStore<FavoriteList>(path));
+        favorites.Add(new FavoriteItem { Kind = MediaKind.Movie, TmdbId = "1", Title = "A" });
+        favorites.Add(new FavoriteItem { Kind = MediaKind.Series, TmdbId = "1", Title = "B" });
+        favorites.Add(new FavoriteItem { Kind = MediaKind.Movie, TmdbId = "1", Title = "A2" });
+
+        Assert.Equal(new[] { "A2", "B" }, favorites.List().Select(f => f.Title));
+        Assert.True(favorites.Contains(MediaKind.Series, "1"));
+
+        var reloaded = new Favorites(new JsonStore<FavoriteList>(path));
+        Assert.True(reloaded.Remove(MediaKind.Movie, "1"));
+        Assert.False(reloaded.Contains(MediaKind.Movie, "1"));
+        Assert.Throws<InvalidOperationException>(() => reloaded.Add(new FavoriteItem { Kind = MediaKind.Movie, TmdbId = "", Title = "x" }));
     }
 }

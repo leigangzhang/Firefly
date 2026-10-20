@@ -25,6 +25,16 @@ public sealed class SearchService
         _keywords = keywords;
     }
 
+    /// <summary>
+    /// 按 InfoHash 找回最近搜索结果里的版本。前端只拿到版本 ID，提交下载时由这里换回完整版本（含磁力），
+    /// 这样网页和接口里都看不到原始发布名和磁力链接。
+    /// </summary>
+    public Release? FindRelease(string infoHash) =>
+        _cache.Values
+            .Where(c => DateTimeOffset.UtcNow - c.At < CacheTtl)
+            .SelectMany(c => c.Result.Releases)
+            .FirstOrDefault(r => string.Equals(r.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+
     public async Task<SearchResult> SearchAsync(MediaQuery query, bool refresh, CancellationToken ct)
     {
         var cacheKey = query.QuotaKey;
