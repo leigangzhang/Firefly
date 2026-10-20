@@ -1,16 +1,41 @@
 {
-  "version": 2,
-  "updatedAt": "2026-10-20",
+  "format": 1,
+  "version": 3,
+  "updatedAt": "2026-10-21",
   "sources": [
     {
       "name": "diao.im",
-      "kind": "diao",
+      "kind": "jsonApi",
       "endpoints": [
         "https://m.diao.im/api/search"
       ],
       "pageSize": 10,
       "maxPages": 5,
-      "enabled": true
+      "enabled": true,
+      "request": {
+        "keywordParam": "keyword",
+        "limitParam": "limit",
+        "offsetParam": "offset",
+        "maxLimit": 10
+      },
+      "response": {
+        "statusPath": "status",
+        "statusOk": "200",
+        "messagePath": "message",
+        "itemsPath": "data.torrents",
+        "hasMorePath": "data.has_more",
+        "fields": {
+          "infoHash": "hash",
+          "name": "name",
+          "magnet": "magnet_uri",
+          "size": "size",
+          "createdAt": "created_at",
+          "createdAtFormat": "unix",
+          "files": "files",
+          "filePath": "path",
+          "fileSize": "size"
+        }
+      }
     }
   ],
   "publisherKeywords": [

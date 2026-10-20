@@ -377,20 +377,135 @@ public class SearchServiceTests
     }
 
     [Fact]
-    public void DiaoTorrentMapsToRelease()
+    public void JsonApiRuleMapsDiaoResponseToReleases()
     {
-        var release = DiaoSource.ToRelease(new DiaoSource.DiaoTorrent
-        {
-            Hash = "abcdef",
-            Name = "【高清剧集网发布 www.DDHDTV.com】测试.2024.1080p",
-            Size = 123,
-            CreatedAt = 1_787_365_846,
-            Files = new() { new DiaoSource.DiaoFile { Path = "dir/a.mkv", Size = 100 } },
-        });
+        var rule = RulesLoader.LoadDefault().Sources.Single(s => s.Name == "diao.im");
+        using var doc = System.Text.Json.JsonDocument.Parse("""
+            {"status":200,"message":"success","data":{"has_more":true,"torrents":[
+              {"hash":"abcdef","name":"【高清剧集网发布 www.DDHDTV.com】测试.2024.1080p","size":123,"magnet_uri":"","created_at":1787365846,
+               "files":[{"path":"dir/a.mkv","size":100}]},
+              {"hash":"","name":"没有 hash 的条目会被丢掉"}]}}
+            """);
+
+        var releases = JsonApiSource.ParsePage(rule, doc.RootElement, out var hasMore);
+
+        var release = Assert.Single(releases);
+        Assert.True(hasMore);
         Assert.Equal("ABCDEF", release.InfoHash);
         Assert.Equal("magnet:?xt=urn:btih:ABCDEF", release.Magnet);
+        Assert.Equal(123, release.SizeBytes);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1_787_365_846), release.CreatedAt);
         Assert.Equal("DDHDTV", release.Traits.Publisher);
-        Assert.Single(release.Files);
+        Assert.Equal("diao.im", release.Source);
+        Assert.Equal(new ReleaseFile("dir/a.mkv", 100), Assert.Single(release.Files));
+    }
+
+    [Fact]
+    public void JsonApiRuleRejectsBadStatus()
+    {
+        var rule = RulesLoader.LoadDefault().Sources.Single(s => s.Name == "diao.im");
+        using var doc = System.Text.Json.JsonDocument.Parse("""{"status":500,"message":"busy"}""");
+        var ex = Assert.Throws<SourceException>(() => JsonApiSource.ParsePage(rule, doc.RootElement, out _));
+        Assert.Contains("busy", ex.Message);
+    }
+
+    [Fact]
+    public void JsonApiRuleSupportsOtherFieldNamesAndIsoDates()
+    {
+        var rule = new SourceRule
+        {
+            Name = "other",
+            Kind = "jsonApi",
+            PageSize = 2,
+            Response = new JsonApiResponse
+            {
+                ItemsPath = "results",
+                Fields = new JsonApiFields { InfoHash = "info.btih", Name = "title", Size = "bytes", CreatedAt = "date", CreatedAtFormat = "iso" },
+            },
+        };
+        using var doc = System.Text.Json.JsonDocument.Parse("""
+            {"results":[{"info":{"btih":"aa"},"title":"A.2024.2160p","bytes":"42","date":"2026-10-01T00:00:00Z"},{"info":{"btih":"bb"},"title":"B"}]}
+            """);
+
+        var releases = JsonApiSource.ParsePage(rule, doc.RootElement, out var hasMore);
+
+        Assert.Equal(new[] { "AA", "BB" }, releases.Select(r => r.InfoHash));
+        Assert.Equal(42, releases[0].SizeBytes);
+        Assert.Equal(new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero), releases[0].CreatedAt);
+        // 没有 hasMorePath 时，本页取满就认为还有下一页
+        Assert.True(hasMore);
+    }
+}
+
+public class RulesTests
+{
+    private const string Base = """
+        {"format":1,"version":3,
+         "sources":[{"name":"a","kind":"jsonApi","endpoints":["https://a1/api"],"maxPages":5,"response":{"itemsPath":"data.items"}}],
+         "publisherKeywords":["甲","乙"],
+         "thunder":{"tempSuffixes":[".xltd"]}}
+        """;
+
+    [Fact]
+    public void OverrideChangesOnlyTheFieldsItWrites()
+    {
+        var rules = RulesLoader.Merge(Base, """
+            // 站点换了域名，只改 endpoints
+            {"sources":[{"name":"a","endpoints":["https://a2/api"]},{"name":"b","kind":"jsonApi","endpoints":["https://b/api"],"response":{"itemsPath":"list"}}],
+             "publisherKeywords":["丙"]}
+            """);
+
+        Assert.True(rules.HasOverride);
+        Assert.Equal(3, rules.Version);
+        var a = rules.Sources[0];
+        Assert.Equal(new[] { "https://a2/api" }, a.Endpoints);
+        Assert.Equal(5, a.MaxPages);
+        Assert.Equal("data.items", a.Response.ItemsPath);
+        Assert.Equal("b", rules.Sources[1].Name);
+        Assert.Equal(new[] { "丙" }, rules.PublisherKeywords);
+        Assert.Equal(new[] { ".xltd" }, rules.Thunder.TempSuffixes);
+    }
+
+    [Fact]
+    public void OverrideCanDisableABuiltinSource()
+    {
+        var rules = RulesLoader.Merge(Base, """{"sources":[{"name":"a","enabled":false}]}""");
+        Assert.Empty(SourceFactory.Create(rules, new HttpClient()));
+    }
+
+    [Fact]
+    public void NewerFormatAndLegacyCopiesAreIgnored()
+    {
+        var newer = RulesLoader.Merge(Base, """{"format":2,"publisherKeywords":["丙"]}""");
+        Assert.False(newer.HasOverride);
+        Assert.Equal(new[] { "甲", "乙" }, newer.PublisherKeywords);
+        Assert.Contains(newer.Warnings, w => w.Contains("格式版本 2"));
+
+        var legacy = RulesLoader.Merge(Base, """{"version":2,"sources":[{"name":"a","kind":"diao"}]}""");
+        Assert.False(legacy.HasOverride);
+        Assert.Equal("jsonApi", legacy.Sources[0].Kind);
+        Assert.Contains(legacy.Warnings, w => w.Contains("旧版规则"));
+    }
+
+    [Fact]
+    public void UnknownSourceKindIsSkippedWithWarning()
+    {
+        var rules = RulesLoader.Merge(Base, """{"sources":[{"name":"c","kind":"html","endpoints":["https://c"]}]}""");
+        var sources = SourceFactory.Create(rules, new HttpClient());
+        Assert.Equal(new[] { "a" }, sources.Select(s => s.Name));
+        Assert.Contains(rules.Warnings, w => w.Contains("搜索源 c"));
+    }
+
+    [Fact]
+    public void BrokenOverrideFileFallsBackToBuiltin()
+    {
+        using var dir = new TempDir();
+        var path = System.IO.Path.Combine(dir.Path, "rules.json");
+        System.IO.File.WriteAllText(path, "{ not json");
+        var rules = RulesLoader.Load(path);
+        Assert.False(rules.HasOverride);
+        Assert.NotEmpty(rules.Sources);
+        Assert.Single(rules.Warnings);
     }
 }
 

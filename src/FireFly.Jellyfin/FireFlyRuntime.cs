@@ -57,6 +57,8 @@ public sealed class FireFlyRuntime
 
     public RulesDocument Rules => _rules;
 
+    public int SourceCount => _sources.Count;
+
     private static PluginConfiguration Config => Plugin.Instance?.Configuration ?? new PluginConfiguration();
 
     public string DownloadDir =>

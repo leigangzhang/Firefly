@@ -124,7 +124,7 @@ cd out/repo && python3 -m http.server 8765         # 保持这个终端开着
 | 热门榜单提示填写 TMDb Key | 在配置页填写 TMDb API Key 并保存 |
 | 用中文片名搜不到资源，用原名能搜到 | 资源站常用和 TMDb 不同的译名。搜索会依次用 TMDb 主标题、原名、中港台别名加发布者关键词去搜，命中一个就停；仍然搜不到时点抽屉右上角刷新重试 |
 | 预告片黑屏或加载不出来 | 预告片来自 YouTube，网络访问不了 YouTube 时播放不了；点下方"在 YouTube 打开"或略过 |
-| 某个"出品"选项筛出来的结果不对 | 制片公司 / 平台的 TMDb ID 写在规则文件 `discover.companies` / `discover.networks` 里，复制 `src/FireFly.Core/Rules/rules.default.json` 到数据目录的 `rules.json` 改正即可 |
+| 某个"出品"选项筛出来的结果不对 | 制片公司 / 平台的 TMDb ID 写在规则文件 `discover.companies` / `discover.networks` 里，在数据目录的 `rules.json` 里只写要改的部分即可，格式见 `docs/规则文件格式.md` |
 
 ---
 
@@ -133,7 +133,7 @@ cd out/repo && python3 -m http.server 8765         # 保持这个终端开着
 | 项 | 怎么判断通过 | 不通过时改哪里 |
 |---|---|---|
 | M1 自动使用插件配置的下载目录 | 点"下载"后，文件出现在配置的迅雷下载目录 | 已实现：`MacThunderDownloader.SubmitAsync` 在 `open magnet` 前执行 `defaults write com.xunlei.Thunder specifySavePath/LastSavePath`，并创建目标目录 |
-| M2 只看文件系统就能判断进度和完成 | 任务列表里的进度在增长，下载完成后状态自动变为"已入库" | 先把 `src/FireFly.Core/Rules/rules.default.json` 里的 `thunder.tempSuffixes` 改成实测的临时后缀；仍然不行，就在 `MacThunderDownloader.Probe` 里改为只读查询 `etm_map.db` |
+| M2 只看文件系统就能判断进度和完成 | 任务列表里的进度在增长，下载完成后状态自动变为"已入库" | 先在数据目录的 `rules.json` 里把 `thunder.tempSuffixes` 改成实测的临时后缀；仍然不行，就在 `MacThunderDownloader.Probe` 里改为只读查询 `etm_map.db` |
 | M3 插件库不放 GitHub | 执行 `./make-repo.sh https://你的地址`，把 `out/repo` 里的文件上传到该地址，在 Jellyfin 里添加存储库并安装成功 | 先改用 GitHub Releases |
 
 M2 实测方法：下载过程中执行 `ls -laR ~/Downloads/FireFly`，记录迅雷临时文件的命名方式，以及下载完成那一刻文件名发生了什么变化。
@@ -146,4 +146,4 @@ M2 实测方法：下载过程中执行 `ls -laR ~/Downloads/FireFly`，记录�
 
 - `tasks.json`：下载任务；
 - `favorites.json`：收藏；
-- `rules.json`（可选）：覆盖内置规则，版本号不低于内置版本时生效。
+- `rules.json`（可选）：叠加在内置规则上，只写要改的部分；格式和加载顺序见 `docs/规则文件格式.md`。

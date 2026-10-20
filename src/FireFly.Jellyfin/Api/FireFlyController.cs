@@ -82,6 +82,9 @@ public sealed class FireFlyController : ControllerBase
             sameVolumeSeries = SameVolume(dir, paths.SeriesRoot),
             tmdbConfigured = _runtime.Tmdb.Configured,
             rulesVersion = _runtime.Rules.Version,
+            rulesOverride = _runtime.Rules.HasOverride,
+            rulesWarnings = _runtime.Rules.Warnings,
+            sourceCount = _runtime.SourceCount,
             dataDir = _runtime.DataDir,
             libraries = (_runtime.Host as JellyfinMediaHost)?.AllLocations().Select(l => new { l.Library, l.Type, l.Path }),
         });

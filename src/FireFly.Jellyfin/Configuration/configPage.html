@@ -41,8 +41,11 @@
       var fields = ['ThunderDownloadDir', 'MovieLibraryPath', 'SeriesLibraryPath', 'TmdbApiKey', 'TmdbLanguage', 'PublisherKeywords'];
       var page = document.querySelector('#FireFlyConfigPage');
 
+      function esc(text) {
+        return String(text).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; });
+      }
       function line(label, value, ok) {
-        return '<div>' + label + '：<b style="color:' + (ok === false ? '#ff8a80' : 'inherit') + '">' + value + '</b></div>';
+        return '<div>' + esc(label) + '：<b style="color:' + (ok === false ? '#ff8a80' : 'inherit') + '">' + esc(value) + '</b></div>';
       }
       function loadStatus() {
         ApiClient.ajax({ url: ApiClient.getUrl('FireFly/status'), type: 'GET', dataType: 'json' }).then(function (s) {
@@ -52,6 +55,8 @@
             line('电影库', (s.movieRoot || '未找到') + (s.sameVolumeMovie === false ? '（与下载目录不在同一磁盘，入库会变成复制）' : ''), !!s.movieRoot) +
             line('剧集库', (s.seriesRoot || '未找到') + (s.sameVolumeSeries === false ? '（与下载目录不在同一磁盘，入库会变成复制）' : ''), !!s.seriesRoot) +
             line('TMDb', s.tmdbConfigured ? '已配置' : '未配置', s.tmdbConfigured) +
+            line('规则', '版本 ' + s.rulesVersion + (s.rulesOverride ? '（叠加了数据目录里的 rules.json）' : '') + '，可用搜索源 ' + s.sourceCount + ' 个', s.sourceCount > 0) +
+            (s.rulesWarnings || []).map(function (w) { return line('规则提示', w, false); }).join('') +
             line('数据目录', s.dataDir);
         });
       }
