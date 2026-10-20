@@ -130,11 +130,25 @@ public sealed class DownloadWatcher
         try
         {
             var moved = _archiver.Archive(task.Query, files);
+            IReadOnlyList<string> cleaned;
+            var cleanupNote = string.Empty;
+            try
+            {
+                cleaned = _archiver.CleanupSources(files, _downloader.DownloadDir);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                cleaned = Array.Empty<string>();
+                cleanupNote = "；下载目录清理失败：" + ex.Message;
+            }
+
             Save(id, t =>
             {
                 t.State = TaskState.Done;
                 t.ArchivedPaths = moved.ToList();
-                t.Message = $"已入库 {moved.Count} 个文件";
+                t.Message = $"已入库 {moved.Count} 个文件"
+                    + (cleaned.Count > 0 ? $"，已清理 {cleaned.Count} 个下载目录" : string.Empty)
+                    + cleanupNote;
             });
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)

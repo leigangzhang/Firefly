@@ -207,7 +207,7 @@ public class DownloadTests
     public void ProbeSeesTempFileThenCompletedFile()
     {
         using var dir = new TempDir();
-        var downloader = new MacThunderDownloader(() => dir.Path, () => Rules, (_, _) => Task.FromResult(0));
+        var downloader = new MacThunderDownloader(() => dir.Path, () => Rules, (_, _) => Task.FromResult(0), (_, _) => Task.CompletedTask);
         var task = new DownloadTask { Release = Movie, SubmittedAt = DateTimeOffset.UtcNow };
 
         Assert.Equal(0, downloader.Probe(task).BytesDone);
@@ -230,7 +230,7 @@ public class DownloadTests
         using var dir = new TempDir();
         dir.File("Dune.2021.2160p.mkv", 100 * Mb);
         dir.File("Dune.2021.2160p.mkv.td.cfg", 1);
-        var downloader = new MacThunderDownloader(() => dir.Path, () => Rules, (_, _) => Task.FromResult(0));
+        var downloader = new MacThunderDownloader(() => dir.Path, () => Rules, (_, _) => Task.FromResult(0), (_, _) => Task.CompletedTask);
         Assert.False(downloader.Probe(new DownloadTask { Release = Movie }).Complete);
     }
 
@@ -258,7 +258,7 @@ public class DownloadTests
         var store = new JsonStore<TaskList>(System.IO.Path.Combine(dir.Path, "state", "tasks.json"));
         var quota = new QuotaLedger(new JsonStore<QuotaState>(System.IO.Path.Combine(dir.Path, "state", "quota.json")), LicenseTests.Verifier(out _), () => null, 5);
         string? opened = null;
-        var downloader = new MacThunderDownloader(() => downloads, () => Rules, (url, _) => { opened = url; return Task.FromResult(0); });
+        var downloader = new MacThunderDownloader(() => downloads, () => Rules, (url, _) => { opened = url; return Task.FromResult(0); }, (_, _) => Task.CompletedTask);
         var app = new FireFlyApp(store, downloader, quota);
         var clock = DateTimeOffset.UtcNow;
         var watcher = new DownloadWatcher(store, downloader, new Archiver(host, () => Rules), now: () => clock);
@@ -297,13 +297,66 @@ public class DownloadTests
     }
 
     [Fact]
+    public async Task WatcherCleansReleaseFolderAfterArchive()
+    {
+        using var dir = new TempDir();
+        var downloads = System.IO.Path.Combine(dir.Path, "dl");
+        var releaseDir = System.IO.Path.Combine(downloads, "Dune.2021.2160p");
+        var host = new FakeHost(System.IO.Path.Combine(dir.Path, "Movies"), System.IO.Path.Combine(dir.Path, "TV"));
+        var store = new JsonStore<TaskList>(System.IO.Path.Combine(dir.Path, "state", "tasks.json"));
+        var quota = new QuotaLedger(new JsonStore<QuotaState>(System.IO.Path.Combine(dir.Path, "state", "quota.json")), LicenseTests.Verifier(out _), () => null, 5);
+        var downloader = new MacThunderDownloader(() => downloads, () => Rules, (_, _) => Task.FromResult(0), (_, _) => Task.CompletedTask);
+        var app = new FireFlyApp(store, downloader, quota);
+        var clock = DateTimeOffset.UtcNow;
+        var watcher = new DownloadWatcher(store, downloader, new Archiver(host, () => Rules), now: () => clock);
+
+        var query = new MediaQuery { Kind = MediaKind.Movie, Title = "沙丘", Year = 2021, TmdbId = "438631" };
+        await app.SubmitAsync(query, Movie, default);
+
+        Directory.CreateDirectory(releaseDir);
+        var video = System.IO.Path.Combine(releaseDir, "Dune.2021.2160p.mkv");
+        using (var fs = new FileStream(video, FileMode.Create)) { fs.SetLength(100 * Mb); }
+        System.IO.File.WriteAllText(System.IO.Path.Combine(releaseDir, "advert.torrent"), "x");
+
+        clock = clock.AddSeconds(10);
+        watcher.Tick();
+        clock = clock.AddSeconds(10);
+        watcher.Tick();
+
+        var task = app.ListTasks()[0];
+        Assert.Equal(TaskState.Done, task.State);
+        Assert.Contains("已清理 1 个下载目录", task.Message);
+        Assert.True(System.IO.File.Exists(System.IO.Path.Combine(host.Paths.MovieRoot!, "沙丘 (2021)", "沙丘 (2021).mkv")));
+        Assert.False(Directory.Exists(releaseDir));
+        Assert.True(Directory.Exists(downloads));
+    }
+
+    [Fact]
+    public async Task SubmitSetsThunderSavePathBeforeOpeningMagnet()
+    {
+        using var dir = new TempDir();
+        var target = System.IO.Path.Combine(dir.Path, "downloads");
+        var calls = new List<string>();
+        var downloader = new MacThunderDownloader(
+            () => target,
+            () => Rules,
+            (_, _) => { calls.Add("open"); return Task.FromResult(0); },
+            (path, _) => { calls.Add("save:" + path); return Task.CompletedTask; });
+
+        await downloader.SubmitAsync(Movie, default);
+
+        Assert.True(Directory.Exists(target));
+        Assert.Equal(new[] { "save:" + target + System.IO.Path.DirectorySeparatorChar, "open" }, calls);
+    }
+
+    [Fact]
     public void WatcherMarksStalledWhenNothingAppears()
     {
         using var dir = new TempDir();
         var store = new JsonStore<TaskList>(System.IO.Path.Combine(dir.Path, "tasks.json"));
         var clock = DateTimeOffset.UtcNow;
         store.Update(l => { l.Tasks.Add(new DownloadTask { Release = Movie, SubmittedAt = clock }); return 0; });
-        var downloader = new MacThunderDownloader(() => dir.Path, () => Rules, (_, _) => Task.FromResult(0));
+        var downloader = new MacThunderDownloader(() => dir.Path, () => Rules, (_, _) => Task.FromResult(0), (_, _) => Task.CompletedTask);
         var watcher = new DownloadWatcher(store, downloader, new Archiver(new FakeHost(dir.Path, dir.Path), () => Rules), now: () => clock);
 
         clock = clock.AddMinutes(11);

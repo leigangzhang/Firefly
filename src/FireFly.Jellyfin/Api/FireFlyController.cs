@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FireFly.Core;
 using FireFly.Core.Models;
 using MediaBrowser.Controller.Entities;
@@ -29,6 +30,19 @@ public sealed class FireFlyController : ControllerBase
         _library = library;
     }
 
+    private static readonly JsonSerializerOptions ApiJsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// 前端统一按 camelCase 读取字段；Jellyfin 默认的 MVC JSON 配置会保留 PascalCase，
+    /// 所以 FireFly 的接口自己序列化，避免 TMDb 卡片、发布版本和下载任务出现 undefined。
+    /// </summary>
+    private IActionResult ApiJson(object? value, int statusCode = StatusCodes.Status200OK) => new ContentResult
+    {
+        Content = JsonSerializer.Serialize(value, ApiJsonOptions),
+        ContentType = "application/json; charset=utf-8",
+        StatusCode = statusCode,
+    };
+
     /// <summary>注入的前端脚本和样式（index.html 里引用，无需登录）。</summary>
     [HttpGet("web/{name}")]
     [AllowAnonymous]
@@ -51,7 +65,7 @@ public sealed class FireFlyController : ControllerBase
         var quota = _runtime.Quota.Status();
         var paths = _runtime.Host.GetLibraryPaths();
         var dir = _runtime.DownloadDir;
-        return Ok(new
+        return ApiJson(new
         {
             version = typeof(FireFlyController).Assembly.GetName().Version?.ToString(),
             vip = quota.IsVip,
@@ -78,14 +92,14 @@ public sealed class FireFlyController : ControllerBase
     {
         if (!_runtime.Tmdb.Configured)
         {
-            return Ok(new { configured = false, items = Array.Empty<object>() });
+            return ApiJson(new { configured = false, items = Array.Empty<object>() });
         }
 
         var mediaKind = kind == "tv" ? MediaKind.Series : MediaKind.Movie;
         try
         {
             var items = await _runtime.Tmdb.TrendingAsync(mediaKind, ct).ConfigureAwait(false);
-            return Ok(new
+            return ApiJson(new
             {
                 configured = true,
                 items = items.Select(i => new
@@ -104,7 +118,7 @@ public sealed class FireFlyController : ControllerBase
         }
         catch (HttpRequestException ex)
         {
-            return StatusCode(StatusCodes.Status502BadGateway, new { error = "TMDb 请求失败：" + ex.Message });
+            return ApiJson(new { error = "TMDb 请求失败：" + ex.Message }, StatusCodes.Status502BadGateway);
         }
     }
 
@@ -117,17 +131,17 @@ public sealed class FireFlyController : ControllerBase
         {
             var seasons = series.GetRecursiveChildren(i => i is Season).OfType<Season>()
                 .Select(s => s.IndexNumber ?? 0).Where(n => n > 0).Distinct().OrderBy(n => n).ToList();
-            return Ok(new { seasons = seasons.Count > 0 ? seasons : new List<int> { 1 } });
+            return ApiJson(new { seasons = seasons.Count > 0 ? seasons : new List<int> { 1 } });
         }
 
         if (!string.IsNullOrEmpty(tmdbId) && _runtime.Tmdb.Configured)
         {
             var detail = await _runtime.Tmdb.DetailAsync(MediaKind.Series, tmdbId, ct).ConfigureAwait(false);
             var count = Math.Max(1, detail?.SeasonCount ?? 1);
-            return Ok(new { seasons = Enumerable.Range(1, count) });
+            return ApiJson(new { seasons = Enumerable.Range(1, count) });
         }
 
-        return Ok(new { seasons = new[] { 1 } });
+        return ApiJson(new { seasons = new[] { 1 } });
     }
 
     [HttpPost("search")]
@@ -137,11 +151,11 @@ public sealed class FireFlyController : ControllerBase
         var query = ResolveQuery(request);
         if (query is null || string.IsNullOrWhiteSpace(query.Title))
         {
-            return BadRequest(new { error = "无法识别要搜索的影片" });
+            return ApiJson(new { error = "无法识别要搜索的影片" }, StatusCodes.Status400BadRequest);
         }
 
         var result = await _runtime.Search.SearchAsync(query, request.Refresh, ct).ConfigureAwait(false);
-        return Ok(new
+        return ApiJson(new
         {
             query = result.Query,
             releases = result.Releases,
@@ -159,21 +173,21 @@ public sealed class FireFlyController : ControllerBase
         try
         {
             var task = await _runtime.App.SubmitAsync(request.Query, request.Release, ct).ConfigureAwait(false);
-            return Ok(task);
+            return ApiJson(task);
         }
         catch (QuotaExceededException ex)
         {
-            return StatusCode(StatusCodes.Status402PaymentRequired, new { error = ex.Message, quota = ex.Status });
+            return ApiJson(new { error = ex.Message, quota = ex.Status }, StatusCodes.Status402PaymentRequired);
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return ApiJson(new { error = ex.Message }, StatusCodes.Status400BadRequest);
         }
     }
 
     [HttpGet("tasks")]
     [Authorize(Policy = Elevated)]
-    public IActionResult Tasks() => Ok(_runtime.App.ListTasks());
+    public IActionResult Tasks() => ApiJson(_runtime.App.ListTasks());
 
     [HttpPost("tasks/{id}/dismiss")]
     [Authorize(Policy = Elevated)]

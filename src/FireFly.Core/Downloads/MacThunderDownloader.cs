@@ -8,28 +8,36 @@ public interface IDownloader
 {
     string Name { get; }
 
+    string DownloadDir { get; }
+
     Task SubmitAsync(Release release, CancellationToken ct);
 
     DownloadProgress Probe(DownloadTask task);
 }
 
 /// <summary>
-/// macOS 桌面迅雷。只走"正门"：
-/// - 提交（M1）：<c>open "magnet:..."</c>，由系统交给迅雷；下载目录由用户事先在迅雷里设好。
-/// - 进度（M2）：只看文件系统，不读写迅雷的数据库和配置。
-/// 实测不通过时的回退点见《初步设计》第八节：M1 回退到 defaults write，M2 回退到只读 etm_map.db。
+/// macOS 桌面迅雷。提交前把迅雷的保存目录改成插件配置的下载目录，再交给系统打开磁力链接。
+/// 进度只读文件系统；不读写迅雷任务数据库。
 /// </summary>
 public sealed class MacThunderDownloader : IDownloader
 {
+    private const string ThunderPreferenceDomain = "com.xunlei.Thunder";
+
     private readonly Func<string> _downloadDir;
     private readonly Func<RulesDocument> _rules;
     private readonly Func<string, CancellationToken, Task<int>> _open;
+    private readonly Func<string, CancellationToken, Task> _setSavePath;
 
-    public MacThunderDownloader(Func<string> downloadDir, Func<RulesDocument> rules, Func<string, CancellationToken, Task<int>>? open = null)
+    public MacThunderDownloader(
+        Func<string> downloadDir,
+        Func<RulesDocument> rules,
+        Func<string, CancellationToken, Task<int>>? open = null,
+        Func<string, CancellationToken, Task>? setSavePath = null)
     {
         _downloadDir = downloadDir;
         _rules = rules;
         _open = open ?? OpenWithSystemAsync;
+        _setSavePath = setSavePath ?? SetThunderSavePathAsync;
     }
 
     public string Name => "迅雷（macOS）";
@@ -42,6 +50,9 @@ public sealed class MacThunderDownloader : IDownloader
         {
             throw new InvalidOperationException("不是磁力链接");
         }
+
+        var savePath = PrepareDownloadDirectory(_downloadDir());
+        await _setSavePath(savePath, ct).ConfigureAwait(false);
 
         var code = await _open(release.Magnet, ct).ConfigureAwait(false);
         if (code != 0)
@@ -132,6 +143,48 @@ public sealed class MacThunderDownloader : IDownloader
         catch (IOException)
         {
             return Array.Empty<string>();
+        }
+    }
+
+    /// <summary>迅雷只接受带结尾分隔符的目录；先创建目录，路径不可写时在提交前明确失败。</summary>
+    private static string PrepareDownloadDirectory(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new InvalidOperationException("未配置迅雷下载目录");
+        }
+
+        var full = Path.GetFullPath(path);
+        try
+        {
+            Directory.CreateDirectory(full);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException($"无法创建迅雷下载目录：{full}", ex);
+        }
+
+        return full.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+    }
+
+    private static async Task SetThunderSavePathAsync(string path, CancellationToken ct)
+    {
+        await RunDefaultsAsync("specifySavePath", path, ct).ConfigureAwait(false);
+        await RunDefaultsAsync("LastSavePath", path, ct).ConfigureAwait(false);
+    }
+
+    private static async Task RunDefaultsAsync(string key, string value, CancellationToken ct)
+    {
+        using var process = Process.Start(new ProcessStartInfo("defaults", new[] { "write", ThunderPreferenceDomain, key, "-string", value })
+        {
+            UseShellExecute = false,
+            RedirectStandardError = true,
+        }) ?? throw new InvalidOperationException("无法启动 defaults");
+        var stderr = await process.StandardError.ReadToEndAsync(ct).ConfigureAwait(false);
+        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"无法设置迅雷下载目录（defaults {key} 退出码 {process.ExitCode}）：{stderr.Trim()}");
         }
     }
 

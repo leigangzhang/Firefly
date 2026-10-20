@@ -101,6 +101,53 @@ public sealed class Archiver
         return moved;
     }
 
+    /// <summary>
+    /// 归档成功后删除本次下载在下载根目录下留下的发布目录。
+    /// 只删下载根目录的直接子目录，且目录里不能还有达到阈值的视频，避免误删其他任务或下载根本身。
+    /// </summary>
+    public IReadOnlyList<string> CleanupSources(IReadOnlyList<string> videoFiles, string downloadRoot)
+    {
+        if (string.IsNullOrWhiteSpace(downloadRoot))
+        {
+            return Array.Empty<string>();
+        }
+
+        var fullRoot = Path.GetFullPath(downloadRoot);
+        var root = fullRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (root.Length == 0)
+        {
+            root = fullRoot;
+        }
+
+        var rules = _rules();
+        var dirs = videoFiles
+            .Select(file => TopLevelDirectory(root, file))
+            .Where(dir => dir is not null)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var removed = new List<string>();
+        foreach (var dir in dirs)
+        {
+            if (dir is null || !Directory.Exists(dir) || new DirectoryInfo(dir).LinkTarget is not null)
+            {
+                continue;
+            }
+
+            var hasRemainingVideo = Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+                .Any(file => rules.IsVideo(file) && new FileInfo(file).Length >= rules.MinVideoBytes);
+            if (hasRemainingVideo)
+            {
+                continue;
+            }
+
+            Directory.Delete(dir, recursive: true);
+            removed.Add(dir);
+        }
+
+        return removed;
+    }
+
     /// <summary>与视频同目录、同名前缀的字幕：movie.srt / movie.chs.ass。</summary>
     internal static IEnumerable<string> SidecarSubtitles(string video, RulesDocument rules)
     {
@@ -121,6 +168,19 @@ public sealed class Archiver
     {
         var stem = Path.GetFileNameWithoutExtension(video);
         return Path.GetFileName(subtitle)[stem.Length..];
+    }
+
+    /// <summary>返回下载根目录下包含该文件的直接子目录；文件直接在根目录时返回 null。</summary>
+    private static string? TopLevelDirectory(string root, string file)
+    {
+        var relative = Path.GetRelativePath(root, Path.GetFullPath(file));
+        if (relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var segment = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+        return string.IsNullOrEmpty(segment) || relative.Length == segment.Length ? null : Path.Combine(root, segment);
     }
 
     private static string Unique(string path)

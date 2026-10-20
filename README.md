@@ -74,9 +74,11 @@ cd out/repo && python3 -m http.server 8765         # 保持这个终端开着
 
 > 必须先退出 Jellyfin 再覆盖 DLL，否则运行中的进程可能读到半写的文件，报 `BadImageFormatException`。
 
+手工安装后，FireFly 会由 Jellyfin 自身提供插件仓库清单（`http://127.0.0.1:8096/FireFly/manifest.json`）和安装包（`/FireFly/package.zip`）。把该清单地址加到 **控制台 → 插件 → 存储库**（名称可填 `FireFly（本机）`）后，插件详情页才能从仓库读到 FireFly 的元数据；否则页面会显示“从存储库获取插件详情时发生错误”。
+
 ### 4. 设置迅雷（M1）
 
-1. 迅雷 → 设置 → **下载目录**：改为 `~/Downloads/FireFly`（先在访达里新建这个文件夹），或者改成你在插件配置里填的目录。
+1. FireFly 提交前会自动把迅雷的 `specifySavePath` / `LastSavePath` 改成插件配置里的**迅雷下载目录**，并确保该目录存在；为保险起见，仍建议在迅雷 → 设置 → **下载目录**里设成同一个目录。
 2. 关闭"新建任务时弹出确认 / 选择下载位置"之类的选项（以你的迅雷版本里的实际名称为准）。
 3. 确认迅雷是磁力链接的默认打开方式：在终端执行 `open "magnet:?xt=urn:btih:0000000000000000000000000000000000000000"`，看是否由迅雷接管（这个测试任务可以直接删除）。
 
@@ -86,7 +88,7 @@ cd out/repo && python3 -m http.server 8765         # 保持这个终端开着
 
 | 配置项 | 说明 |
 |---|---|
-| 迅雷下载目录 | 留空为 `~/Downloads/FireFly`，需要与第 4 步迅雷里设置的目录一致 |
+| 迅雷下载目录 | 留空为 `~/Downloads/FireFly`。提交前会写入迅雷并用于扫描进度；迅雷里也建议设成同一目录 |
 | 电影库目录 / 剧集库目录 | 留空时自动使用 Jellyfin 第一个"电影"/"节目"媒体库。最好与下载目录在同一块磁盘，入库时就是瞬间完成的移动；不在同一块磁盘时会变成复制 |
 | TMDb API Key | 用于"发现"热门榜单，在 themoviedb.org 账号设置 → API 里免费申请 |
 | 发布者关键词 | 留空使用内置默认（DDHDTV、高清剧集网），一行一个词 |
@@ -99,7 +101,7 @@ cd out/repo && python3 -m http.server 8765         # 保持这个终端开着
 1. 浏览器按 `Cmd+Shift+R` 强制刷新 Jellyfin 网页（首次安装后需要刷新一次，才能加载注入的脚本）。
 2. 打开任意电影 / 剧集详情页 → 点云朵图标 **获取资源** → 剧集先选季 → 在版本列表里点 **下载**。
 3. 或点顶栏的火焰图标 **发现** → 本周热门电影 / 剧集 → 点海报进入同样的版本列表。
-4. 点面板右上角的 **下载任务** 查看进度。下载完成后状态会变为"已入库"，媒体库会自动刷新。
+4. 点面板右上角的 **下载任务** 查看进度。下载完成后状态会变为"已入库"，媒体库会自动刷新，并清理下载目录中本次发布的残留目录；下载根本身不会删除。
 
 > 入口只对 Jellyfin 管理员账号显示。
 
@@ -118,7 +120,7 @@ cd out/repo && python3 -m http.server 8765         # 保持这个终端开着
 |---|---|
 | 详情页没有"获取资源"按钮 | 按 `Cmd+Shift+R` 强制刷新；确认当前账号是管理员；在 `~/Library/Application Support/jellyfin/log/` 最新的日志里搜索 `FireFly`，确认插件已加载 |
 | 点"下载"后报"无法把磁力交给迅雷" | 迅雷没有安装，或者不是磁力链接的默认打开方式，见第 4 步第 3 项 |
-| 任务一直是"等待迅雷开始"，10 分钟后变成"停滞" | 迅雷可能弹出了确认窗口，或者下载目录与插件配置不一致（**M1 不通过**，见下一节） |
+| 任务一直是"等待迅雷开始"，10 分钟后变成"停滞" | 迅雷可能弹出了确认窗口；先确认文件是否落在配置的迅雷下载目录。若迅雷拒绝了自动保存路径，仍按 **M1** 排查 |
 | 迅雷在下载，但进度一直是 0 或者下完了不入库 | 迅雷的临时文件命名与规则不符（**M2 不通过**），见下一节 |
 | 状态显示"归档失败" | 媒体库目录不存在或没有写入权限；在配置页检查电影库 / 剧集库路径 |
 | "发现"页提示填写 TMDb Key | 在配置页填写 TMDb API Key 并保存 |
@@ -129,7 +131,7 @@ cd out/repo && python3 -m http.server 8765         # 保持这个终端开着
 
 | 项 | 怎么判断通过 | 不通过时改哪里 |
 |---|---|---|
-| M1 不改迅雷配置也能自动开始下载 | 点"下载"后，迅雷不弹窗就自动开始，文件出现在下载目录 | `MacThunderDownloader.SubmitAsync`：提交前执行 `defaults write com.xunlei.Thunder specifySavePath/LastSavePath`（老项目的做法） |
+| M1 自动使用插件配置的下载目录 | 点"下载"后，文件出现在配置的迅雷下载目录 | 已实现：`MacThunderDownloader.SubmitAsync` 在 `open magnet` 前执行 `defaults write com.xunlei.Thunder specifySavePath/LastSavePath`，并创建目标目录 |
 | M2 只看文件系统就能判断进度和完成 | 任务列表里的进度在增长，下载完成后状态自动变为"已入库" | 先把 `src/FireFly.Core/Rules/rules.default.json` 里的 `thunder.tempSuffixes` 改成实测的临时后缀；仍然不行，就在 `MacThunderDownloader.Probe` 里改为只读查询 `etm_map.db` |
 | M3 插件库不放 GitHub | 执行 `./make-repo.sh https://你的地址`，把 `out/repo` 里的文件上传到该地址，在 Jellyfin 里添加存储库并安装成功 | 先改用 GitHub Releases |
 
