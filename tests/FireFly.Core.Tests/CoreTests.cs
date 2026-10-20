@@ -743,6 +743,68 @@ public class DownloadTests
     }
 }
 
+public class TmdbSettingsTests
+{
+    private sealed class Recorder : HttpMessageHandler
+    {
+        public List<HttpRequestMessage> Requests { get; } = new();
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Requests.Add(request);
+            var body = request.Method == HttpMethod.Head ? string.Empty : """{"page":1,"results":[{"id":1,"title":"沙丘","poster_path":"/p.jpg"}]}""";
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(body) });
+        }
+    }
+
+    [Fact]
+    public void EmptyBasesFallBackToDefaultsAndTrailingSlashIsTrimmed()
+    {
+        var empty = new TmdbSettings("k", "zh-CN");
+        Assert.Equal("https://api.tmdb.org/3", empty.Api);
+        Assert.Equal("https://image.tmdb.org/t/p", empty.Images);
+        var custom = new TmdbSettings("k", "zh-CN", " https://tmdb.example.com/3/ ", "https://img.example.com/t/p/");
+        Assert.Equal("https://tmdb.example.com/3", custom.Api);
+        Assert.Equal("https://img.example.com/t/p", custom.Images);
+    }
+
+    [Fact]
+    public async Task ClientUsesConfiguredApiAndImageBases()
+    {
+        var recorder = new Recorder();
+        var http = new HttpClient(recorder);
+        var client = new TmdbClient(() => http, () => new TmdbSettings("key", "zh-CN", "https://tmdb.example.com/3", "https://img.example.com/t/p"));
+
+        var items = await client.TrendingAsync(MediaKind.Movie, default);
+        Assert.StartsWith("https://tmdb.example.com/3/trending/movie/week?api_key=key", recorder.Requests[0].RequestUri!.ToString());
+        Assert.Equal("https://img.example.com/t/p/w342/p.jpg", items.Single().PosterUrl);
+
+        var check = await client.CheckAsync(default);
+        Assert.True(check.ApiOk);
+        Assert.True(check.ImageOk);
+        Assert.Equal("https://img.example.com/t/p/w342/p.jpg", check.SamplePosterUrl);
+        Assert.Equal(HttpMethod.Head, recorder.Requests[^1].Method);
+    }
+
+    [Fact]
+    public async Task CheckReportsUnreachableHosts()
+    {
+        var http = new HttpClient(new FailingHandler());
+        var client = new TmdbClient(() => http, () => new TmdbSettings("key", "zh-CN"));
+        var check = await client.CheckAsync(default);
+        Assert.False(check.ApiOk);
+        Assert.False(check.ImageOk);
+        Assert.Contains("api.tmdb.org", check.ApiMessage);
+        Assert.Contains("image.tmdb.org", check.ImageMessage);
+    }
+
+    private sealed class FailingHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            throw new HttpRequestException("连接被重置");
+    }
+}
+
 public class DiscoverTests
 {
     private static readonly DiscoverRule Rule = RulesLoader.LoadDefault().Discover;

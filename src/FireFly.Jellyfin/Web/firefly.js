@@ -878,9 +878,10 @@
     var download = el('button', { class: 'ff-btn', text: '⬇ 下载', onclick: function () {
       openSearch({ title: d.title, originalTitle: d.originalTitle, year: d.year, kind: d.kind, tmdbId: d.tmdbId }, d.title);
     } });
-    var trailerBtn = d.videos.length ? el('button', { class: 'ff-btn ff-ghost', text: '▶ 播放预告片', onclick: function () {
+    var trailers = meta.showTrailers ? d.videos : [];
+    var trailerBtn = trailers.length ? el('button', { class: 'ff-btn ff-ghost', text: '▶ 播放预告片', onclick: function () {
       var t = body.querySelector('.ff-trailer');
-      if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); play(d.videos[0]); }
+      if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); play(trailers[0]); }
     } }) : null;
 
     var facts = [d.certification ? el('span', { class: 'ff-cert', text: d.certification }) : null,
@@ -913,7 +914,7 @@
     // 1. 剧情介绍
     main.appendChild(section('剧情介绍', el('p', { class: 'ff-overview', text: d.overview || '暂无中文简介。' })));
 
-    // 2. 预告片
+    // 2. 预告片（YouTube；配置页可关闭，大陆网络不翻墙时打不开）
     var player = el('div', { class: 'ff-trailer' });
     function play(v) {
       player.innerHTML = '';
@@ -925,16 +926,16 @@
       }));
       Array.prototype.forEach.call(body.querySelectorAll('.ff-vid'), function (b) { b.classList.toggle('ff-on', b.dataset.key === v.key); });
     }
-    if (d.videos.length) {
-      var first = d.videos[0];
+    if (trailers.length) {
+      var first = trailers[0];
       player.appendChild(el('button', { class: 'ff-trailer-cover', onclick: function () { play(first); },
         style: d.backdropUrl ? 'background-image:url("' + d.backdropUrl + '")' : '' }, [el('span', { class: 'ff-play', text: '▶' })]));
-      var picks = el('div', { class: 'ff-vids' }, d.videos.map(function (v) {
+      var picks = el('div', { class: 'ff-vids' }, trailers.map(function (v) {
         return el('button', { class: 'ff-fopt ff-vid', 'data-key': v.key, text: v.name || v.type, onclick: function () { play(v); } });
       }));
       main.appendChild(section('预告片', player, picks,
         el('a', { class: 'ff-dim ff-small', href: 'https://www.youtube.com/watch?v=' + encodeURIComponent(first.key), target: '_blank', rel: 'noopener', text: '播放不了？在 YouTube 打开' })));
-    } else {
+    } else if (meta.showTrailers) {
       main.appendChild(section('预告片', el('div', { class: 'ff-msg ff-dim', text: 'TMDb 暂无预告片' })));
     }
 

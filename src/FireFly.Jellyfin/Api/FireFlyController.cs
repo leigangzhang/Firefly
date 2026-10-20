@@ -206,6 +206,12 @@ public sealed class FireFlyController : ControllerBase
         }
     }
 
+    /// <summary>配置页的 TMDb 自检：接口入口和图片域名是否可达。</summary>
+    [HttpGet("selfcheck/tmdb")]
+    [Authorize(Policy = Elevated)]
+    public async Task<IActionResult> CheckTmdb(CancellationToken ct) =>
+        ApiJson(await _runtime.Tmdb.CheckAsync(ct).ConfigureAwait(false));
+
     /// <summary>资源详情页。kind = movie | tv。</summary>
     [HttpGet("detail/{kind}/{tmdbId}")]
     [Authorize(Policy = Elevated)]
@@ -230,6 +236,7 @@ public sealed class FireFlyController : ControllerBase
                 detail,
                 inLibrary = InLibrary(mediaKind, detail.TmdbId, detail.Title, detail.Year),
                 favorite = _runtime.Favorites.Contains(mediaKind, detail.TmdbId),
+                showTrailers = _runtime.ShowTrailers,
             });
         }
         catch (HttpRequestException ex)

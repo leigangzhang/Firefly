@@ -72,34 +72,51 @@ public sealed record TmdbDetail(
     IReadOnlyList<TmdbSeason> Seasons,
     int? CurrentSeason = null);
 
+/// <summary>TMDb 连接设置。ApiBase / ImageBase 为空时用默认入口；入口被屏蔽时在配置页改成可用的地址。</summary>
+public sealed record TmdbSettings(string ApiKey, string Language, string? ApiBase = null, string? ImageBase = null)
+{
+    // 部分网络会把 api.themoviedb.org 解析到不可达 IP；api.tmdb.org 是同一 API 的可用入口。
+    public const string DefaultApiBase = "https://api.tmdb.org/3";
+    public const string DefaultImageBase = "https://image.tmdb.org/t/p";
+
+    public string Api => string.IsNullOrWhiteSpace(ApiBase) ? DefaultApiBase : ApiBase.Trim().TrimEnd('/');
+
+    public string Images => string.IsNullOrWhiteSpace(ImageBase) ? DefaultImageBase : ImageBase.Trim().TrimEnd('/');
+}
+
+/// <summary>自检结果：接口和图片域名各自是否可达；SamplePosterUrl 给浏览器再试加载一张图。</summary>
+public sealed record TmdbCheck(bool ApiOk, string ApiMessage, bool ImageOk, string ImageMessage, string? SamplePosterUrl);
+
 /// <summary>TMDb：热门、按条件发现、类型表、详情。API Key 由用户自己填，只存在本机配置里。响应在内存里缓存一段时间。</summary>
 public sealed class TmdbClient
 {
-    private const string Base = "https://api.themoviedb.org/3";
-    private const string ImageBase = "https://image.tmdb.org/t/p/w342";
-    private const string BackdropBase = "https://image.tmdb.org/t/p/w1280";
-    private const string ProfileBase = "https://image.tmdb.org/t/p/w185";
-    private const string LogoBase = "https://image.tmdb.org/t/p/w92";
+    private const string PosterSize = "/w342";
+    private const string BackdropSize = "/w1280";
+    private const string ProfileSize = "/w185";
+    private const string LogoSize = "/w92";
     private static readonly TimeSpan ListTtl = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan DetailTtl = TimeSpan.FromHours(6);
     private static readonly TimeSpan GenreTtl = TimeSpan.FromHours(24);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private readonly HttpClient _http;
-    private readonly Func<(string ApiKey, string Language)> _settings;
+    private readonly Func<HttpClient> _http;
+    private readonly Func<TmdbSettings> _settings;
     private readonly ConcurrentDictionary<string, (DateTimeOffset Expires, string Json)> _cache = new();
 
-    public TmdbClient(HttpClient http, Func<(string ApiKey, string Language)> settings)
+    /// <summary>http 每次请求时取，代理设置改了以后用新的客户端。</summary>
+    public TmdbClient(Func<HttpClient> http, Func<TmdbSettings> settings)
     {
         _http = http;
         _settings = settings;
     }
+
+    private string Images => _settings().Images;
 
     public bool Configured => !string.IsNullOrWhiteSpace(_settings().ApiKey);
 
     public async Task<IReadOnlyList<TmdbItem>> TrendingAsync(MediaKind kind, CancellationToken ct)
     {
         var page = await GetAsync<TmdbPage>($"/trending/{Segment(kind)}/week", null, ListTtl, ct).ConfigureAwait(false);
-        return (page?.Results ?? new()).Select(r => r.ToItem(kind)).ToList();
+        return (page?.Results ?? new()).Select(r => r.ToItem(kind, Images)).ToList();
     }
 
     public async Task<TmdbPageResult> DiscoverAsync(DiscoverPlan plan, CancellationToken ct)
@@ -110,7 +127,7 @@ public sealed class TmdbClient
             page?.Page ?? 1,
             Math.Min(page?.TotalPages ?? 1, 500),
             page?.TotalResults ?? 0,
-            (page?.Results ?? new()).Select(r => r.ToItem(kind)).ToList());
+            (page?.Results ?? new()).Select(r => r.ToItem(kind, Images)).ToList());
     }
 
     /// <summary>TMDb 的类型表（已按配置语言翻译）。</summary>
@@ -153,7 +170,7 @@ public sealed class TmdbClient
             },
             ListTtl,
             ct).ConfigureAwait(false);
-        return ToSearchPage(result);
+        return ToSearchPage(result, Images);
     }
 
     /// <summary>常见中文片名错字/近音字；只用于补搜，不替换用户原始查询。</summary>
@@ -176,13 +193,13 @@ public sealed class TmdbClient
         ("权利", "权力"),
     };
 
-    internal static TmdbPageResult ToSearchPage(TmdbPage? page) => new(
+    internal static TmdbPageResult ToSearchPage(TmdbPage? page, string images = TmdbSettings.DefaultImageBase) => new(
         page?.Page ?? 1,
         Math.Min(page?.TotalPages ?? 1, 500),
         page?.TotalResults ?? 0,
         (page?.Results ?? new())
             .Where(r => r.MediaType is "movie" or "tv")
-            .Select(r => r.ToItem(r.MediaType == "tv" ? MediaKind.Series : MediaKind.Movie))
+            .Select(r => r.ToItem(r.MediaType == "tv" ? MediaKind.Series : MediaKind.Movie, images))
             .ToList());
 
     /// <summary>
@@ -225,7 +242,7 @@ public sealed class TmdbClient
     public async Task<TmdbItem?> DetailAsync(MediaKind kind, string tmdbId, CancellationToken ct)
     {
         var r = await GetAsync<TmdbResult>($"/{Segment(kind)}/{Uri.EscapeDataString(tmdbId)}", null, DetailTtl, ct).ConfigureAwait(false);
-        return r?.ToItem(kind);
+        return r?.ToItem(kind, Images);
     }
 
     /// <summary>详情页：基本信息 + 预告片 + 演职员 + 分级 + 播放平台。</summary>
@@ -240,7 +257,47 @@ public sealed class TmdbClient
             DetailTtl,
             ct).ConfigureAwait(false);
         using var doc = JsonDocument.Parse(json);
-        return ParseDetail(kind, doc.RootElement, watchRegions);
+        return ParseDetail(kind, doc.RootElement, watchRegions, images: Images);
+    }
+
+    /// <summary>
+    /// 自检：接口入口能否用当前 Key 取到热门，图片域名能否连上。
+    /// 图片最终由浏览器加载，所以顺带返回一张海报地址，配置页再在浏览器里试一次。
+    /// </summary>
+    public async Task<TmdbCheck> CheckAsync(CancellationToken ct)
+    {
+        var settings = _settings();
+        bool apiOk;
+        string apiMessage;
+        string? sample = null;
+        try
+        {
+            var page = JsonSerializer.Deserialize<TmdbPage>(await GetJsonAsync("/trending/movie/week", null, ListTtl, ct).ConfigureAwait(false), JsonOptions);
+            sample = page?.Results?.Select(r => r.ToItem(MediaKind.Movie, settings.Images).PosterUrl).FirstOrDefault(u => u is not null);
+            (apiOk, apiMessage) = (true, settings.Api + " 可用");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or JsonException && !ct.IsCancellationRequested)
+        {
+            (apiOk, apiMessage) = (false, $"{settings.Api} 不可用：{ex.Message}");
+        }
+
+        bool imageOk;
+        string imageMessage;
+        try
+        {
+            // 只看能不能连上：任何 HTTP 响应都说明域名可达，解析失败或超时才算不可达
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            using var request = new HttpRequestMessage(HttpMethod.Head, sample ?? settings.Images + LogoSize + "/");
+            using var response = await _http().SendAsync(request, timeout.Token).ConfigureAwait(false);
+            (imageOk, imageMessage) = (true, $"{settings.Images} 可达（HTTP {(int)response.StatusCode}）");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            (imageOk, imageMessage) = (false, $"{settings.Images} 不可达：{ex.Message}");
+        }
+
+        return new TmdbCheck(apiOk, apiMessage, imageOk, imageMessage, sample);
     }
 
     private async Task<T?> GetAsync<T>(string path, IReadOnlyDictionary<string, string>? query, TimeSpan ttl, CancellationToken ct)
@@ -251,7 +308,8 @@ public sealed class TmdbClient
 
     private async Task<string> GetJsonAsync(string path, IReadOnlyDictionary<string, string>? query, TimeSpan ttl, CancellationToken ct)
     {
-        var (key, language) = _settings();
+        var settings = _settings();
+        var (key, language) = (settings.ApiKey, settings.Language);
         if (string.IsNullOrWhiteSpace(key))
         {
             throw new InvalidOperationException("未配置 TMDb API Key");
@@ -260,14 +318,14 @@ public sealed class TmdbClient
         var extra = string.Concat((query ?? new Dictionary<string, string>())
             .OrderBy(kv => kv.Key, StringComparer.Ordinal)
             .Select(kv => $"&{kv.Key}={Uri.EscapeDataString(kv.Value)}"));
-        var url = $"{Base}{path}?api_key={Uri.EscapeDataString(key)}&language={Uri.EscapeDataString(language)}{extra}";
+        var url = $"{settings.Api}{path}?api_key={Uri.EscapeDataString(key)}&language={Uri.EscapeDataString(language)}{extra}";
         var now = DateTimeOffset.UtcNow;
         if (_cache.TryGetValue(url, out var hit) && hit.Expires > now)
         {
             return hit.Json;
         }
 
-        using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
+        using var response = await _http().GetAsync(url, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException($"TMDb 返回 {(int)response.StatusCode}", null, response.StatusCode);
@@ -283,7 +341,7 @@ public sealed class TmdbClient
         return json;
     }
 
-    internal static TmdbDetail ParseDetail(MediaKind kind, JsonElement r, IReadOnlyList<string> watchRegions, DateOnly? today = null)
+    internal static TmdbDetail ParseDetail(MediaKind kind, JsonElement r, IReadOnlyList<string> watchRegions, DateOnly? today = null, string images = TmdbSettings.DefaultImageBase)
     {
         var movie = kind == MediaKind.Movie;
         var title = Str(r, movie ? "title" : "name") ?? string.Empty;
@@ -305,21 +363,21 @@ public sealed class TmdbClient
                 .Select(g => new TmdbPerson(
                     g.Key,
                     string.Join(" / ", g.Select(c => Str(c, "job") == "Director" ? "导演" : "编剧").Distinct()),
-                    g.Select(c => Image(ProfileBase, Str(c, "profile_path"))).FirstOrDefault(u => u is not null)))
+                    g.Select(c => Image(images, ProfileSize, Str(c, "profile_path"))).FirstOrDefault(u => u is not null)))
                 .Take(6));
             cast.AddRange(Arr(credits, "cast").Take(18)
-                .Select(c => new TmdbPerson(Str(c, "name") ?? string.Empty, Str(c, "character"), Image(ProfileBase, Str(c, "profile_path")))));
+                .Select(c => new TmdbPerson(Str(c, "name") ?? string.Empty, Str(c, "character"), Image(images, ProfileSize, Str(c, "profile_path")))));
         }
         else if (!movie)
         {
             directors.AddRange(Arr(r, "created_by").Take(6)
-                .Select(c => new TmdbPerson(Str(c, "name") ?? string.Empty, "主创", Image(ProfileBase, Str(c, "profile_path")))));
+                .Select(c => new TmdbPerson(Str(c, "name") ?? string.Empty, "主创", Image(images, ProfileSize, Str(c, "profile_path")))));
             if (r.TryGetProperty("aggregate_credits", out var agg))
             {
                 cast.AddRange(Arr(agg, "cast").Take(18).Select(c => new TmdbPerson(
                     Str(c, "name") ?? string.Empty,
                     Arr(c, "roles").Select(role => Str(role, "character")).FirstOrDefault(n => !string.IsNullOrEmpty(n)),
-                    Image(ProfileBase, Str(c, "profile_path")),
+                    Image(images, ProfileSize, Str(c, "profile_path")),
                     Int(c, "total_episode_count"))));
             }
         }
@@ -344,8 +402,8 @@ public sealed class TmdbClient
             date,
             Str(r, "overview"),
             Str(r, "tagline"),
-            Image(ImageBase, Str(r, "poster_path")),
-            Image(BackdropBase, Str(r, "backdrop_path")),
+            Image(images, PosterSize, Str(r, "poster_path")),
+            Image(images, BackdropSize, Str(r, "backdrop_path")),
             r.TryGetProperty("vote_average", out var va) && va.ValueKind == JsonValueKind.Number ? va.GetDouble() : null,
             Int(r, "vote_count") ?? 0,
             runtime,
@@ -363,9 +421,9 @@ public sealed class TmdbClient
             directors,
             cast,
             videos,
-            Logos(r, "production_companies"),
-            Logos(r, "networks"),
-            Providers(r, watchRegions),
+            Logos(r, "production_companies", images),
+            Logos(r, "networks", images),
+            Providers(r, watchRegions, images),
             Arr(r, "seasons")
                 .Where(se => (Int(se, "season_number") ?? 0) > 0)
                 .Select(se => new TmdbSeason(
@@ -373,7 +431,7 @@ public sealed class TmdbClient
                     Str(se, "name") ?? string.Empty,
                     Int(se, "episode_count") ?? 0,
                     Str(se, "air_date") is { Length: >= 4 } ad && int.TryParse(ad[..4], out var sy) ? sy : null,
-                    Image(ImageBase, Str(se, "poster_path")),
+                    Image(images, PosterSize, Str(se, "poster_path")),
                     Str(se, "air_date"),
                     Str(se, "overview"),
                     se.TryGetProperty("vote_average", out var sv) && sv.ValueKind == JsonValueKind.Number && sv.GetDouble() > 0 ? sv.GetDouble() : null))
@@ -457,7 +515,7 @@ public sealed class TmdbClient
         return null;
     }
 
-    private static TmdbWatchProviders? Providers(JsonElement r, IReadOnlyList<string> regions)
+    private static TmdbWatchProviders? Providers(JsonElement r, IReadOnlyList<string> regions, string images)
     {
         if (!r.TryGetProperty("watch/providers", out var wp) || !wp.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Object)
         {
@@ -469,7 +527,7 @@ public sealed class TmdbClient
             if (results.TryGetProperty(region, out var entry))
             {
                 List<TmdbLogo> Pick(string name) => Arr(entry, name)
-                    .Select(p => new TmdbLogo(Str(p, "provider_name") ?? string.Empty, Image(LogoBase, Str(p, "logo_path"))))
+                    .Select(p => new TmdbLogo(Str(p, "provider_name") ?? string.Empty, Image(images, LogoSize, Str(p, "logo_path"))))
                     .ToList();
                 var stream = Pick("flatrate").Concat(Pick("free")).Concat(Pick("ads")).DistinctBy(p => p.Name).ToList();
                 return new TmdbWatchProviders(region, Str(entry, "link"), stream, Pick("rent"), Pick("buy"));
@@ -479,10 +537,10 @@ public sealed class TmdbClient
         return null;
     }
 
-    private static List<TmdbLogo> Logos(JsonElement r, string name) =>
-        Arr(r, name).Select(c => new TmdbLogo(Str(c, "name") ?? string.Empty, Image(LogoBase, Str(c, "logo_path")))).ToList();
+    private static List<TmdbLogo> Logos(JsonElement r, string name, string images) =>
+        Arr(r, name).Select(c => new TmdbLogo(Str(c, "name") ?? string.Empty, Image(images, LogoSize, Str(c, "logo_path")))).ToList();
 
-    private static string? Image(string size, string? path) => string.IsNullOrEmpty(path) ? null : size + path;
+    private static string? Image(string images, string size, string? path) => string.IsNullOrEmpty(path) ? null : images + size + path;
 
     private static IEnumerable<JsonElement> Arr(JsonElement e, string name) =>
         e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var a) && a.ValueKind == JsonValueKind.Array ? a.EnumerateArray() : Enumerable.Empty<JsonElement>();
@@ -561,7 +619,7 @@ public sealed class TmdbClient
         [JsonPropertyName("media_type")]
         public string? MediaType { get; set; }
 
-        public TmdbItem ToItem(MediaKind kind)
+        public TmdbItem ToItem(MediaKind kind, string images = TmdbSettings.DefaultImageBase)
         {
             var title = (kind == MediaKind.Movie ? Title : Name) ?? Title ?? Name ?? string.Empty;
             var original = kind == MediaKind.Movie ? OriginalTitle : OriginalName;
@@ -574,7 +632,7 @@ public sealed class TmdbClient
                 string.Equals(original, title, StringComparison.Ordinal) ? null : original,
                 year,
                 Overview,
-                string.IsNullOrEmpty(PosterPath) ? null : ImageBase + PosterPath,
+                string.IsNullOrEmpty(PosterPath) ? null : images + PosterSize + PosterPath,
                 VoteAverage,
                 NumberOfSeasons,
                 GenreIds);

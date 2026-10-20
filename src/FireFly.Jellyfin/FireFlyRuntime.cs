@@ -13,6 +13,8 @@ namespace FireFly.Jellyfin;
 public sealed class FireFlyRuntime
 {
     private readonly HttpClient _http;
+    private readonly object _tmdbHttpLock = new();
+    private (string Proxy, HttpClient Client)? _tmdbHttp;
     private RulesDocument _rules;
     private IReadOnlyList<IResourceSource> _sources;
 
@@ -30,7 +32,11 @@ public sealed class FireFlyRuntime
         Favorites = new Favorites(new JsonStore<FavoriteList>(Path.Combine(dataDir, "favorites.json")));
         Downloader = new MacThunderDownloader(() => DownloadDir, () => _rules);
         Search = new SearchService(() => _sources, () => _rules, Keywords);
-        Tmdb = new TmdbClient(_http, () => (Config.TmdbApiKey.Trim(), string.IsNullOrWhiteSpace(Config.TmdbLanguage) ? "zh-CN" : Config.TmdbLanguage.Trim()));
+        Tmdb = new TmdbClient(TmdbHttp, () => new TmdbSettings(
+            Config.TmdbApiKey.Trim(),
+            string.IsNullOrWhiteSpace(Config.TmdbLanguage) ? "zh-CN" : Config.TmdbLanguage.Trim(),
+            Config.TmdbApiBase,
+            Config.TmdbImageBase));
         App = new FireFlyApp(Tasks, Downloader);
         Watcher = new DownloadWatcher(Tasks, Downloader, new Archiver(host, () => _rules));
     }
@@ -57,6 +63,8 @@ public sealed class FireFlyRuntime
 
     public RulesDocument Rules => _rules;
 
+    public bool ShowTrailers => Config.ShowTrailers;
+
     public int SourceCount => _sources.Count;
 
     private static PluginConfiguration Config => Plugin.Instance?.Configuration ?? new PluginConfiguration();
@@ -72,6 +80,35 @@ public sealed class FireFlyRuntime
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToList();
         return custom.Count > 0 ? custom : _rules.PublisherKeywords;
+    }
+
+    /// <summary>TMDb 用的 HttpClient：没配代理时和搜索源共用一个；配了代理时按代理地址建一个，代理改了就换新的。</summary>
+    private HttpClient TmdbHttp()
+    {
+        var proxy = Config.TmdbProxy.Trim();
+        if (proxy.Length == 0)
+        {
+            return _http;
+        }
+
+        lock (_tmdbHttpLock)
+        {
+            if (_tmdbHttp is { } cached && cached.Proxy == proxy)
+            {
+                return cached.Client;
+            }
+
+            if (!Uri.TryCreate(proxy, UriKind.Absolute, out var proxyUri))
+            {
+                throw new InvalidOperationException($"TMDb 代理地址不正确：{proxy}");
+            }
+
+            // 旧客户端可能还有请求在用，不主动释放；代理很少改，留给 GC
+            var client = new HttpClient(new HttpClientHandler { Proxy = new System.Net.WebProxy(proxyUri), UseProxy = true }) { Timeout = _http.Timeout };
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) FireFly/0.1");
+            _tmdbHttp = (proxy, client);
+            return client;
+        }
     }
 
     public static string ExpandHome(string path) =>
