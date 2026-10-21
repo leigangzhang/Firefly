@@ -92,7 +92,7 @@
     #FireFlyConfigPage .ffc-field > label { font-size: .9em; }
     #FireFlyConfigPage .ffc-actions { display: flex; gap: .6em; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
     #FireFlyConfigPage .ffc-map { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1em; }
-    #FireFlyConfigPage .ffc-map .ffc-maprow { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: .6em; align-items: center; margin-bottom: .4em; font-size: .9em; }
+    #FireFlyConfigPage .ffc-map .ffc-maprow, #FireFlyConfigPage .ffc-htmlmap .ffc-maprow { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: .6em; align-items: center; margin-bottom: .4em; font-size: .9em; }
     #FireFlyConfigPage .ffc-savebar { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 1em; flex-wrap: wrap; padding: .8em 0; background: inherit; }
     @media (max-width: 700px) {
       #FireFlyConfigPage .ffc-map { grid-template-columns: minmax(0, 1fr); }
@@ -390,8 +390,11 @@
         if (!list.length) {
           box.appendChild(el('div', { class: 'ffc-empty' }, [
             el('strong', { text: '还没有资源站点' }),
-            el('div', { class: 'ffc-desc', text: '萤火虫不内置任何资源站，添加至少一个站点后才能在详情页获取资源。可以粘贴一次在站点上搜索的网页地址让插件自动识别，也可以接入 Jackett / Prowlarr，或粘贴别人分享的规则片段。' }),
-            el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '添加第一个站点', onclick: function () { $('#ffcAddSite').click(); } }),
+            el('div', { class: 'ffc-desc', text: '萤火虫不内置任何资源站，添加至少一个站点后才能在详情页获取资源。有两种方式：粘贴一次在站点上搜索的网页地址让插件自动识别；或者接入 Jackett / Prowlarr，开了人机验证的站也能用。' }),
+            el('div', { class: 'ffc-actions', style: 'justify-content:center' }, [
+              el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '粘贴搜索地址', onclick: function () { addSiteDialog('A'); } }),
+              el('button', { type: 'button', class: 'ffc-btn', text: '连接 Jackett / Prowlarr', onclick: function () { addSiteDialog('B'); } }),
+            ]),
           ]));
         }
         list.forEach(function (s) {
@@ -418,7 +421,7 @@
             grip,
             el('span', { class: 'ffc-dot ' + health.cls, 'aria-hidden': 'true' }),
             el('button', { type: 'button', class: 'ffc-name', 'aria-expanded': open ? 'true' : 'false', text: (open ? '▾ ' : '▸ ') + s.name, onclick: function () { ui.open = open ? null : s.name; renderSites(); } }),
-            el('span', { class: 'ffc-badge', text: s.kind === 'torznab' ? 'Torznab' : s.builtin ? (s.modified ? '内置 · 已改' : '内置') : '自定义' }),
+            el('span', { class: 'ffc-badge', text: s.kind === 'torznab' ? 'Torznab' : s.kind === 'html' ? '网页' + (s.builtin ? '' : ' · 自定义') : s.builtin ? (s.modified ? '内置 · 已改' : '内置') : '自定义' }),
             el('span', { class: 'ffc-status ' + (health.cls === 'bad' ? 'bad' : ''), text: health.text }),
             chips,
             el('button', { type: 'button', class: 'ffc-btn', text: '测试', onclick: function () { testSite(s); } }),
@@ -444,7 +447,7 @@
 
       function siteDetail(s) {
         var box = el('div', { class: 'ffc-detail' });
-        box.appendChild(el('div', { class: 'ffc-desc', text: s.kind === 'torznab' ? 'Torznab 地址（依次尝试）' : '地址（依次尝试，上次成功的自动排到最前）' }));
+        box.appendChild(el('div', { class: 'ffc-desc', text: s.kind === 'torznab' ? 'Torznab 地址（依次尝试）' : s.kind === 'html' ? '搜索地址（{keyword} 是搜索词，{page} 是页码；依次尝试）' : '地址（依次尝试，上次成功的自动排到最前）' }));
         var endpoints = s.endpoints.length ? s.endpoints.slice() : [''];
         function save() {
           var values = Array.prototype.map.call(box.querySelectorAll('.ffc-endpoint input'), function (i) { return i.value.trim(); }).filter(Boolean);
@@ -747,6 +750,7 @@
           pane.innerHTML = '';
           pane.appendChild(current === 'A' ? paneDetect() : current === 'B' ? paneTorznab() : paneSnippet());
         }
+        ui.switchMethod = function (id) { current = id; draw(); };
         body.appendChild(tabs);
         body.appendChild(pane);
         openModal('添加站点', body);
@@ -760,8 +764,9 @@
         var out = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
         function run() {
           if (!input.value.trim()) return;
-          out.innerHTML = '<div class="ffc-desc">正在识别：认识这个站吗… 正在找接口… 正在读取结果…（最多约半分钟）</div>';
-          api('POST', 'FireFly/sources/detect', { url: input.value.trim(), sample: ed.sample }).then(function (r) { out.innerHTML = ''; out.appendChild(detectResult(r)); }, function () { out.innerHTML = '<div class="ffc-note bad">识别请求失败</div>'; });
+          out.innerHTML = '<div class="ffc-desc">正在识别：认识这个站吗… 正在找接口… 正在读网页结果… 正在找磁力…（最多约一分钟）</div>';
+          var pasted = input.value.trim();
+          api('POST', 'FireFly/sources/detect', { url: pasted, sample: ed.sample }).then(function (r) { out.innerHTML = ''; out.appendChild(detectResult(r, pasted)); }, function () { out.innerHTML = '<div class="ffc-note bad">识别请求失败</div>'; });
         }
         input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); run(); } });
         box.appendChild(el('div', { class: 'ffc-field' }, [
@@ -773,7 +778,7 @@
         return box;
       }
 
-      function detectResult(r) {
+      function detectResult(r, pasted) {
         var box = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
         box.appendChild(el('ol', { class: 'ffc-steps', 'aria-label': '识别过程' }, (r.steps || []).map(function (s) {
           var icon = s.state === 'ok' ? '✓' : s.state === 'fail' ? '✕' : s.state === 'info' ? 'ⓘ' : '–';
@@ -782,6 +787,28 @@
         if (r.known) {
           box.appendChild(el('div', { class: 'ffc-note', text: '这个站点已经在列表里了（' + r.rule.name + '）。换了域名的话，在站点列表里展开它改地址即可。' }));
           return box;
+        }
+        if (r.rule && r.rule.kind === 'html') {
+          var hr = r.rule;
+          hr.types = [];
+          box.appendChild(el('div', { class: 'ffc-facts' }, [
+            fact('搜索地址', hr.endpoints[0]),
+            fact('结果条目', hr.html.item),
+            fact('标题', hr.html.title || '条目里的第一个链接'),
+            fact('磁力', hr.html.detail ? '详情页（每次最多 ' + hr.html.detailLimit + ' 个）' : '结果列表里'),
+          ]));
+          if (hr.html.detail) box.appendChild(el('div', { class: 'ffc-note', text: '这个站的磁力在详情页里：每次搜索会多打开最多 ' + hr.html.detailLimit + ' 个详情页（同时 3 个），所以比接口站慢一些；打开过的详情页会记住，下次不再请求。' }));
+          box.appendChild(rows(r.preview));
+          box.appendChild(siteForm(hr, function () { htmlDialog(hr); }));
+          return box;
+        }
+        var blocked = (r.steps || []).some(function (s) { return /人机验证|Jackett/.test(s.detail || ''); });
+        var htmlFail = (r.steps || []).some(function (s) { return /手动填选择器|网页里直接有结果|磁力在哪/.test((s.label || '') + (s.detail || '')); });
+        if (!r.rule && (blocked || htmlFail)) {
+          var acts = el('div', { class: 'ffc-actions' });
+          if (htmlFail) acts.appendChild(el('button', { type: 'button', class: 'ffc-btn', text: '手动填选择器', onclick: function () { htmlDialog(blankHtmlRule(pasted)); } }));
+          if (blocked) acts.appendChild(el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '用 Jackett 接入这个站', onclick: function () { if (ui.switchMethod) ui.switchMethod('B'); } }));
+          box.appendChild(acts);
         }
         if (r.rule) {
           var rule = r.rule;
@@ -834,8 +861,29 @@
         var types = [];
         var out = el('div');
         function rule() { return { name: name.value.trim() || 'Jackett', kind: 'torznab', endpoints: [url.value.trim()], apiKey: key.value.trim(), types: types, enabled: true }; }
+        var probe = el('div', {}, [el('div', { class: 'ffc-desc', text: '正在找本机的 Jackett / Prowlarr…' })]);
+        api('GET', 'FireFly/sources/indexers').then(function (r) {
+          probe.innerHTML = '';
+          var found = (r && r.found) || [];
+          if (!found.length) {
+            probe.appendChild(el('div', { class: 'ffc-note warn', text: '没在本机（9117 / 9696 端口）找到 Jackett 或 Prowlarr。装在别的机器上的话，直接把地址填到下面。' }));
+            return;
+          }
+          found.forEach(function (f) {
+            probe.appendChild(el('div', { class: 'ffc-note' }, [
+              el('span', { style: 'flex:1', text: '找到本机的 ' + f.name + '（' + f.url + '）' + (f.name === 'Prowlarr' ? '：Prowlarr 每个站点有自己的地址，把 {indexerId} 换成站点编号。' : '') }),
+              el('button', { type: 'button', class: 'ffc-btn', text: '填入地址', onclick: function () { url.value = f.torznab; name.value = f.name; key.focus(); } }),
+            ]));
+          });
+        }, function () { probe.innerHTML = ''; });
         return el('div', { style: 'display:flex; flex-direction:column; gap:.9em' }, [
-          el('div', { class: 'ffc-desc', text: 'Jackett 和 Prowlarr 已经适配了几百个资源站点。接上一个，就能用它里面配置好的所有站点，站点改版也由它们跟进。' }),
+          el('div', { class: 'ffc-desc', text: 'Jackett 和 Prowlarr 已经适配了几百个资源站点。接上一个，就能用它里面配置好的所有站点，站点改版也由它们跟进；开了人机验证的站，也可以由它们配合 FlareSolverr 打开。' }),
+          el('ol', { class: 'ffc-steps', 'aria-label': '接入步骤' }, [
+            el('li', {}, [el('span', { class: 'info', text: '1' }), el('span', { html: '安装 Jackett（推荐 Docker：<code>linuxserver/jackett</code>）。要接开了人机验证的站，再装一个 FlareSolverr，并在 Jackett 设置里填它的地址。' })]),
+            el('li', {}, [el('span', { class: 'info', text: '2' }), el('span', { text: '打开 Jackett 网页（默认 http://本机:9117），点"Add indexer"添加你常用的站点。' })]),
+            el('li', {}, [el('span', { class: 'info', text: '3' }), el('span', { text: '复制 Jackett 首页右上角的 API Key，和 Torznab 地址一起填到下面，点"测试连接"。' })]),
+          ]),
+          probe,
           el('div', { class: 'ffc-field' }, [el('label', { for: 'ffcTzUrl', text: 'Torznab 地址' }), url, el('div', { class: 'ffc-desc', text: 'Jackett：首页站点旁的"Copy Torznab Feed"，把站点 ID 换成 all 可一次搜索全部站点。Prowlarr：站点的 Torznab 地址（以 /api 结尾）。' })]),
           el('div', { class: 'ffc-field' }, [el('label', { for: 'ffcTzKey', text: 'API Key' }), key]),
           el('div', { style: 'display:flex; gap:.8em; align-items:center; flex-wrap:wrap' }, [el('label', { for: 'ffcTzName', text: '站点名' }), name, el('span', { class: 'ffc-desc', text: '负责的类型' }), typeChips(types)]),
@@ -888,7 +936,8 @@
         list.forEach(function (rule) {
           var problems = [];
           if (!rule.name) problems.push('缺少 name');
-          if (rule.kind !== 'jsonApi' && rule.kind !== 'torznab') problems.push('kind 必须是 jsonApi 或 torznab');
+          if (rule.kind !== 'jsonApi' && rule.kind !== 'torznab' && rule.kind !== 'html') problems.push('kind 必须是 jsonApi、torznab 或 html');
+          if (rule.kind === 'html' && !(rule.html && rule.html.item)) problems.push('缺少 html.item');
           if (!rule.endpoints || !rule.endpoints.length) problems.push('缺少 endpoints');
           if (rule.kind === 'jsonApi' && !(rule.response && rule.response.itemsPath)) problems.push('缺少 response.itemsPath');
           var card = el('div', { class: 'ffc-panel' }, [el('strong', { text: rule.name || '（没有名字）' })]);
@@ -946,6 +995,51 @@
         body.appendChild(el('div', { class: 'ffc-actions' }, [
           el('button', { type: 'button', class: 'ffc-btn', text: '复制为规则片段', onclick: function () { copy(JSON.stringify(rule, null, 2)); } }),
           el('button', { type: 'button', class: 'ffc-btn', text: '预览', onclick: function () {
+            preview.innerHTML = '<div class="ffc-desc">正在搜索…</div>';
+            api('POST', 'FireFly/sources/test', { rule: rule, keyword: ed.sample }).then(function (x) { preview.innerHTML = ''; preview.appendChild(testResult(x)); }, function () { preview.innerHTML = '<div class="ffc-note bad">请求失败</div>'; });
+          } }),
+        ]));
+        body.appendChild(preview);
+        body.appendChild(siteForm(rule, null));
+        openModal('调整 ' + rule.name + ' 的读取方式', body);
+      }
+
+      // 网页站点：没认出来或认得不对时，手动填 CSS 选择器
+      function blankHtmlRule(pasted) {
+        var u;
+        try { u = new URL(pasted); } catch (e) { u = null; }
+        var template = !u ? '' : u.href.split(encodeURIComponent(ed.sample)).join('{keyword}').split(ed.sample).join('{keyword}');
+        return { name: u ? u.host : '网页站点', kind: 'html', endpoints: [template], maxPages: 1, types: [],
+          html: { item: '', title: '', link: '', size: '', date: '', magnet: '', detail: false, detailLimit: 20, firstPage: 1 } };
+      }
+
+      function htmlDialog(rule) {
+        var h = rule.html;
+        var body = el('div', { class: 'ffc-body' });
+        var preview = el('div');
+        function input(label, value, hint, onchange) {
+          var i = el('input', { class: 'ffc-input', value: value || '', placeholder: hint, 'aria-label': label });
+          i.addEventListener('input', function () { onchange(i.value.trim()); });
+          return el('div', { class: 'ffc-maprow' }, [el('span', { text: label }), i]);
+        }
+        var detail = el('input', { type: 'checkbox', id: 'ffcHtmlDetail' });
+        detail.checked = !!h.detail;
+        detail.addEventListener('change', function () { h.detail = detail.checked; });
+        body.appendChild(el('div', { class: 'ffc-desc', html: '用 CSS 选择器告诉插件怎么读搜索结果页：在浏览器里右键一条结果 →"检查"，看它的标签和 class。<code>选择器@属性</code> 取属性（如 <code>a@href</code>），不写 @ 取文字。体积、时间、磁力留空时插件会自己在条目里找。' }));
+        body.appendChild(el('div', { class: 'ffc-htmlmap' }, [
+          input('搜索地址 *', rule.endpoints[0], 'https://站点/search?q={keyword}&p={page}', function (v) { rule.endpoints = [v]; }),
+          input('结果条目 *', h.item, '如 ul.list > li、table#res tr', function (v) { h.item = v; }),
+          input('标题', h.title, '留空取条目里的第一个链接文字', function (v) { h.title = v || null; }),
+          input('详情链接', h.link, '如 .title a@href', function (v) { h.link = v || null; }),
+          input('体积', h.size, '留空自动找"1.2 GB"这样的文字', function (v) { h.size = v || null; }),
+          input('时间', h.date, '留空自动找日期', function (v) { h.date = v || null; }),
+          input('磁力', h.magnet, '留空自动找 magnet: 链接或 40 位 hash', function (v) { h.magnet = v || null; }),
+          el('div', { class: 'ffc-maprow' }, [el('span', { text: '磁力在详情页' }), el('label', { for: 'ffcHtmlDetail', style: 'display:flex; gap:.5em; align-items:center' }, [detail, el('span', { class: 'ffc-desc', text: '列表里没有磁力时，打开每条结果的详情页去找（每次最多 ' + (h.detailLimit || 20) + ' 个）' })])]),
+        ]));
+        body.appendChild(el('div', { class: 'ffc-actions' }, [
+          el('button', { type: 'button', class: 'ffc-btn', text: '复制为规则片段', onclick: function () { copy(JSON.stringify(rule, null, 2)); } }),
+          el('button', { type: 'button', class: 'ffc-btn', text: '预览', onclick: function () {
+            if (!rule.endpoints[0] || !h.item) { preview.innerHTML = '<div class="ffc-note bad">请先填搜索地址和结果条目</div>'; return; }
             preview.innerHTML = '<div class="ffc-desc">正在搜索…</div>';
             api('POST', 'FireFly/sources/test', { rule: rule, keyword: ed.sample }).then(function (x) { preview.innerHTML = ''; preview.appendChild(testResult(x)); }, function () { preview.innerHTML = '<div class="ffc-note bad">请求失败</div>'; });
           } }),

@@ -269,6 +269,23 @@ public class SiteConfigTests
     }
 
     [Fact]
+    public void DetectorRecognisesChallengeAndServerRenderedPages()
+    {
+        Assert.True(SourceDetector.IsChallenge(403, "challenge", "cloudflare", ""));
+        Assert.True(SourceDetector.IsChallenge(503, null, "cloudflare", "<title>Just a moment...</title>"));
+        Assert.False(SourceDetector.IsChallenge(404, null, "cloudflare", "Just a moment"));
+        Assert.False(SourceDetector.IsChallenge(403, null, "nginx", "forbidden"));
+
+        Assert.True(SourceDetector.LooksLikeResultPage("""<a href="magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567">"""));
+        Assert.False(SourceDetector.LooksLikeResultPage("<html><form action=/search></form></html>"));
+
+        Assert.True(SourceDetector.NeedsSignature(403, """{"error":"Missing sign"}"""));
+        Assert.True(SourceDetector.NeedsSignature(401, """{"msg":"invalid signature"}"""));
+        Assert.False(SourceDetector.NeedsSignature(403, "forbidden"));
+        Assert.False(SourceDetector.NeedsSignature(404, "missing sign"));
+    }
+
+    [Fact]
     public void AutoMapReturnsNullWithoutHashes()
     {
         using var doc = JsonDocument.Parse("""{"list":[{"title":"流浪地球","url":"https://x"}]}""");

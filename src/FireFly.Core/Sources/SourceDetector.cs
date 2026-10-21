@@ -49,6 +49,7 @@ public sealed partial class SourceDetector
 
     private readonly HttpClient _http;
     private int _requests;
+    private string? _signedApi;
 
     public SourceDetector(HttpClient http) => _http = http;
 
@@ -75,8 +76,29 @@ public sealed partial class SourceDetector
         var keywordParam = FindKeywordParam(query, sample);
         if (keywordParam is null)
         {
-            steps.Add(new DetectStep("找搜索词", "fail", "地址里没找到搜索词：请在站内搜索一次，复制搜索结果页的地址"));
-            return Fail(steps);
+            // 搜索词在路径里（/search/流浪地球/1）：没有查询参数可换，只能按网页站点识别
+            if (PathKeyword(page, sample) is not { } inPath)
+            {
+                steps.Add(new DetectStep("找搜索词", "fail", "地址里没找到搜索词：请在站内搜索一次，复制搜索结果页的地址"));
+                return Fail(steps);
+            }
+
+            var pathAttempt = await TryAsync(page, inPath, ct).ConfigureAwait(false);
+            if (pathAttempt.Blocked)
+            {
+                steps.Add(new DetectStep("2. 打开搜索页", "fail", $"{page.Host} 开启了 Cloudflare 人机验证，插件在服务器上打不开它的搜索页（浏览器里能打开是因为你过了验证）"));
+                steps.Add(new DetectStep("怎么办", "info", "可以" + ViaJackett));
+                return Fail(steps);
+            }
+
+            if (pathAttempt.Html is null)
+            {
+                steps.Add(new DetectStep("2. 打开搜索页", "fail", pathAttempt.Error ?? "搜索词在路径里的地址只支持网页站点"));
+                return Fail(steps);
+            }
+
+            steps.Add(new DetectStep("2. 找搜索接口", "skip", "搜索词在路径里，按网页站点识别"));
+            return await DetectHtmlAsync(steps, MiniHtml.Parse(pathAttempt.Html), page, null, inPath, inPath, ct).ConfigureAwait(false) ?? Fail(steps);
         }
 
         var keyword = query.First(p => p.Key == keywordParam).Value;
@@ -85,6 +107,13 @@ public sealed partial class SourceDetector
         JsonCandidate? best = null;
         string? html = null;
         var first = await TryAsync(page, keyword, ct).ConfigureAwait(false);
+        if (first.Blocked)
+        {
+            steps.Add(new DetectStep("2. 打开搜索页", "fail", $"{page.Host} 开启了 Cloudflare 人机验证，插件在服务器上打不开它的搜索页（浏览器里能打开是因为你过了验证）"));
+            steps.Add(new DetectStep("怎么办", "info", "可以" + ViaJackett));
+            return Fail(steps);
+        }
+
         if (first.Json is { } direct)
         {
             best = direct;
@@ -97,6 +126,16 @@ public sealed partial class SourceDetector
         else
         {
             html = first.Html;
+
+            // 搜索页里直接列着带磁力的结果：先按网页站点识别，不再去猜接口路径（少发请求，免得被站点限流）
+            if (html is not null && GuessHtml(MiniHtml.Parse(html), keyword, page) is { MagnetInList: true })
+            {
+                var listed = new List<DetectStep>(steps) { new("2. 找搜索接口", "skip", "搜索页里直接列着带磁力的结果，按网页读取") };
+                if (await DetectHtmlAsync(listed, MiniHtml.Parse(html), page, keywordParam, keyword, keyword, ct).ConfigureAwait(false) is { } fromList)
+                {
+                    return fromList;
+                }
+            }
         }
 
         foreach (var url in GuessUrls(page, keywordParam, keyword))
@@ -163,15 +202,51 @@ public sealed partial class SourceDetector
             steps.Add(new DetectStep("3. 从网页里找线索", "fail", first.Error ?? "没能打开这个网页"));
         }
 
+        if (html is not null && await DetectHtmlAsync(steps, MiniHtml.Parse(html), page, keywordParam, keyword, keyword, ct).ConfigureAwait(false) is { } fromHtml)
+        {
+            return fromHtml;
+        }
+
         if (best is not null)
         {
             steps.Add(new DetectStep("读取结果", "fail", "找到了 JSON 接口，但没认出资源列表或 hash 字段，可以手动调整"));
             return new DetectResult(steps, null, false, Array.Empty<Release>(), best.Url.ToString(), keywordParam, best.Arrays, best.Fields, best.SampleJson);
         }
 
-        steps.Add(new DetectStep("4. 请你帮忙", "info", "按 F12 打开开发者工具 → 网络（Network）→ 再搜一次 → 复制名字里带 search 的那条请求地址，粘贴到这里"));
+        if (html is not null && LooksLikeResultPage(html))
+        {
+            steps.Add(new DetectStep("怎么办", "info", "网页里有磁力，但没认出结果列表的结构；可以在下面手动填选择器，或者" + ViaJackett));
+            return Fail(steps);
+        }
+
+        if (_signedApi is not null)
+        {
+            steps.Add(new DetectStep("怎么办", "info", $"这个站的搜索接口（{_signedApi}）要求每次请求带上网页脚本算出的签名，这是站点用来挡第三方程序的，插件不模仿。可以" + ViaJackett));
+            return Fail(steps);
+        }
+
+        steps.Add(new DetectStep("请你帮忙", "info", "按 F12 打开开发者工具 → 网络（Network）→ 再搜一次 → 复制名字里带 search 的那条请求地址，粘贴到这里。如果那条地址就是你粘贴的网页地址，说明这个站没有数据接口。也可以" + ViaJackett));
         return Fail(steps);
     }
+
+    private const string ViaJackett = "在 Jackett / Prowlarr 里添加这个站（开了人机验证的站需要再配一个 FlareSolverr），然后用\"Torznab\"方式接入。";
+
+    /// <summary>网页里直接有磁力链接或一串 info-hash：结果是服务端渲染的。</summary>
+    internal static bool LooksLikeResultPage(string html) =>
+        html.Contains("magnet:?", StringComparison.OrdinalIgnoreCase)
+        || System.Text.RegularExpressions.Regex.Matches(html, @"(?<![0-9a-fA-F])[0-9a-fA-F]{40}(?![0-9a-fA-F])").Count >= 3;
+
+    /// <summary>接口因为缺少签名拒绝请求：401/403/400，返回里提到 sign / signature。</summary>
+    internal static bool NeedsSignature(int status, string body) =>
+        status is 400 or 401 or 403 && body.Length < 2000
+        && System.Text.RegularExpressions.Regex.IsMatch(body, @"\b(missing|invalid|wrong|bad|no)[ _-]?sign(ature)?\b|\bsign(ature)?[ _-]?(missing|invalid|error|required|expired)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>Cloudflare 等人机验证页：403/503，带 cf-mitigated 头或"Just a moment"挑战页。</summary>
+    internal static bool IsChallenge(int status, string? mitigated, string? server, string body) =>
+        status is 403 or 503 or 429
+        && ((mitigated?.Contains("challenge", StringComparison.OrdinalIgnoreCase) ?? false)
+            || ((server?.Contains("cloudflare", StringComparison.OrdinalIgnoreCase) ?? false)
+                && (body.Contains("Just a moment", StringComparison.OrdinalIgnoreCase) || body.Contains("challenge-platform", StringComparison.OrdinalIgnoreCase))));
 
     private static DetectResult Fail(List<DetectStep> steps) =>
         new(steps, null, false, Array.Empty<Release>(), null, null, Array.Empty<SamplePath>(), Array.Empty<SamplePath>(), null);
@@ -185,7 +260,7 @@ public sealed partial class SourceDetector
 
     private sealed record JsonCandidate(Uri Url, JsonApiResponse? Mapped, IReadOnlyList<Release> Preview, IReadOnlyList<SamplePath> Arrays, IReadOnlyList<SamplePath> Fields, string SampleJson);
 
-    private sealed record Attempt(JsonCandidate? Json, string? Html, string? Error);
+    private sealed record Attempt(JsonCandidate? Json, string? Html, string? Error, bool Blocked = false);
 
     private async Task<Attempt> TryAsync(Uri url, string keyword, CancellationToken ct)
     {
@@ -205,7 +280,16 @@ public sealed partial class SourceDetector
             using var response = await _http.SendAsync(request, cts.Token).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                return new Attempt(null, null, $"HTTP {(int)response.StatusCode}");
+                var status = (int)response.StatusCode;
+                var mitigated = response.Headers.TryGetValues("cf-mitigated", out var m) ? string.Join(",", m) : null;
+                var server = response.Headers.Server.ToString();
+                var text = status is 400 or 401 or 403 or 503 or 429 ? await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false) : string.Empty;
+                var blocked = IsChallenge(status, mitigated, server, text);
+                if (!blocked && NeedsSignature(status, text))
+                {
+                    _signedApi ??= url.AbsolutePath;
+                }
+                return new Attempt(null, null, blocked ? $"HTTP {status}（人机验证）" : $"HTTP {status}", blocked);
             }
 
             body = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);

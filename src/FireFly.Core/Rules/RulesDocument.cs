@@ -97,7 +97,7 @@ public sealed class SourceRule
 {
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>用哪段代码请求和解析，不是站点名：jsonApi 或 torznab。</summary>
+    /// <summary>用哪段代码请求和解析，不是站点名：jsonApi、torznab 或 html。</summary>
     public string Kind { get; set; } = string.Empty;
 
     /// <summary>这个站点负责的资源类型（movie / tv / anime / variety / documentary，即 discover.categories 的 key）；空 = 全部。</summary>
@@ -118,6 +118,40 @@ public sealed class SourceRule
     public JsonApiRequest Request { get; set; } = new();
 
     public JsonApiResponse Response { get; set; } = new();
+
+    /// <summary>html（网页站点）的解析规则。</summary>
+    public HtmlRule? Html { get; set; }
+}
+
+/// <summary>
+/// 网页站点：endpoints 是搜索地址模板，{keyword} 换成搜索词、{page} 换成页码。
+/// 字段写法"选择器@属性"，相对每条结果；不写属性取文字。磁力、体积、时间可以不写，插件在每条结果里自己找。
+/// </summary>
+public sealed class HtmlRule
+{
+    /// <summary>每条结果的选择器，如 div.search-item。</summary>
+    public string Item { get; set; } = string.Empty;
+
+    public string? Title { get; set; }
+
+    /// <summary>详情页链接，如 h3 a@href。</summary>
+    public string? Link { get; set; }
+
+    public string? Size { get; set; }
+
+    public string? Date { get; set; }
+
+    /// <summary>磁力链接；不写时在结果里找 magnet: 链接或 40 位 hash。</summary>
+    public string? Magnet { get; set; }
+
+    /// <summary>磁力在详情页：结果里找不到时打开 Link 指向的页面去找。</summary>
+    public bool Detail { get; set; }
+
+    /// <summary>每次搜索最多打开多少个详情页。</summary>
+    public int DetailLimit { get; set; } = 20;
+
+    /// <summary>{page} 的第一页是几（多数站是 1）。</summary>
+    public int FirstPage { get; set; } = 1;
 }
 
 /// <summary>jsonApi 的请求：GET {endpoint}?{keyword}=..&amp;{limit}=..&amp;{offset}=..</summary>

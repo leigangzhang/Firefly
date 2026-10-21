@@ -192,6 +192,37 @@ public sealed class RulesController : ControllerBase
 
     private const int MaxImportBytes = 512 * 1024;
 
+    /// <summary>
+    /// "连接 Jackett / Prowlarr"：看本机常用端口上有没有在跑，有就给出可以直接填的 Torznab 地址。
+    /// 只探测本机（插件和 Jackett 常装在同一台机器 / 同一个 Docker 网络里），不扫描局域网。
+    /// </summary>
+    [HttpGet("sources/indexers")]
+    public async Task<IActionResult> ProbeIndexers(CancellationToken ct)
+    {
+        var probes = new[]
+        {
+            (Name: "Jackett", Base: "http://127.0.0.1:9117", Path: "/UI/Login", Torznab: "http://127.0.0.1:9117/api/v2.0/indexers/all/results/torznab"),
+            (Name: "Jackett", Base: "http://jackett:9117", Path: "/UI/Login", Torznab: "http://jackett:9117/api/v2.0/indexers/all/results/torznab"),
+            (Name: "Prowlarr", Base: "http://127.0.0.1:9696", Path: "/ping", Torznab: "http://127.0.0.1:9696/{indexerId}/api"),
+            (Name: "Prowlarr", Base: "http://prowlarr:9696", Path: "/ping", Torznab: "http://prowlarr:9696/{indexerId}/api"),
+        };
+        var found = await Task.WhenAll(probes.Select(async p =>
+        {
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(2));
+                using var response = await _runtime.Http.GetAsync(p.Base + p.Path, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+                return (int)response.StatusCode < 500 ? new { name = p.Name, url = p.Base, torznab = p.Torznab } : null;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+            {
+                return null;
+            }
+        })).ConfigureAwait(false);
+        return ApiJson(new { found = found.Where(f => f is not null).GroupBy(f => f!.name).Select(g => g.First()) });
+    }
+
     /// <summary>"试一试"：按（还没保存的）设置，只做优选阶段，看每个关键词能搜到多少。</summary>
     [HttpPost("keywords/try")]
     public async Task<IActionResult> TryKeywords([FromBody] KeywordTryRequest request, CancellationToken ct)

@@ -19,6 +19,8 @@ public static class SourceFactory
 
     public const string Torznab = "torznab";
 
+    public const string Html = "html";
+
     /// <summary>按规则建搜索源；类型不认识的源跳过，并记进 rules.Warnings。</summary>
     public static IReadOnlyList<IResourceSource> Create(RulesDocument rules, HttpClient http)
     {
@@ -70,6 +72,18 @@ public static class SourceFactory
         if (string.Equals(rule.Kind, Torznab, StringComparison.OrdinalIgnoreCase))
         {
             source = new TorznabSource(rule, http);
+            return true;
+        }
+
+        if (string.Equals(rule.Kind, Html, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(rule.Html?.Item))
+            {
+                problem = $"搜索源 {rule.Name} 缺少结果条目的选择器（html.item），已跳过";
+                return false;
+            }
+
+            source = new HtmlSource(rule, http);
             return true;
         }
 
