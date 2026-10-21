@@ -27,6 +27,10 @@ public sealed class FireFlyRuntime
 
         Host = host;
         Tasks = new JsonStore<TaskList>(Path.Combine(dataDir, "tasks.json"));
+        MetadataCache = new DiskCache(Path.Combine(dataDir, "cache", "tmdb"), ".json", MetadataCacheBytes);
+        ImageCache = new DiskCache(Path.Combine(dataDir, "cache", "images"), ".img", ImageCacheBytes);
+        MetadataCache.Prune();
+        ImageCache.Prune();
         Favorites = new Favorites(new JsonStore<FavoriteList>(Path.Combine(dataDir, "favorites.json")));
         Downloader = new MacThunderDownloader(() => DownloadDir, () => _rules);
         Search = new SearchService(() => _sources, () => _rules, Keywords);
@@ -34,12 +38,24 @@ public sealed class FireFlyRuntime
             Config.TmdbApiKey.Trim(),
             string.IsNullOrWhiteSpace(Config.TmdbLanguage) ? "zh-CN" : Config.TmdbLanguage.Trim(),
             Pick(Config.TmdbApiBase, _rules.Tmdb.ApiBases),
-            Pick(Config.TmdbImageBase, _rules.Tmdb.ImageBases)));
+            Pick(Config.TmdbImageBase, _rules.Tmdb.ImageBases)),
+            MetadataCache,
+            ImageCache);
         App = new FireFlyApp(Tasks, Downloader);
         Watcher = new DownloadWatcher(Tasks, Downloader, new Archiver(host, () => _rules));
     }
 
+    /// <summary>TMDb 元数据落盘缓存上限。</summary>
+    public const long MetadataCacheBytes = 50L * 1024 * 1024;
+
+    /// <summary>海报等图片缓存上限。</summary>
+    public const long ImageCacheBytes = 500L * 1024 * 1024;
+
     public string DataDir { get; }
+
+    public DiskCache MetadataCache { get; }
+
+    public DiskCache ImageCache { get; }
 
     public IMediaHost Host { get; }
 

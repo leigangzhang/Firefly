@@ -65,6 +65,42 @@ public sealed class FireFlyController : ControllerBase
         return stream is null ? NotFound() : File(stream, type!);
     }
 
+    /// <summary>
+    /// TMDb 图片经插件取并缓存到本地。&lt;img&gt; 请求带不上 Jellyfin 的登录头，所以不要求登录；
+    /// 只接受 TMDb 的尺寸和文件名，取的也只是配置的图片地址，不能被当成任意转发。
+    /// </summary>
+    [HttpGet("image/{size}/{file}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Image(string size, string file, CancellationToken ct)
+    {
+        try
+        {
+            var image = await _runtime.Tmdb.GetImageAsync(size, file, ct).ConfigureAwait(false);
+            if (image is null)
+            {
+                return NotFound();
+            }
+
+            // 同一路径的图片不会变，让浏览器长期缓存
+            Response.Headers.CacheControl = "public, max-age=2592000, immutable";
+            return File(image.Value.Data, image.Value.ContentType);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway);
+        }
+    }
+
+    /// <summary>清空 TMDb 元数据和图片缓存。</summary>
+    [HttpDelete("cache")]
+    [Authorize(Policy = Elevated)]
+    public IActionResult ClearCache()
+    {
+        _runtime.MetadataCache.Clear();
+        _runtime.ImageCache.Clear();
+        return ApiJson(new { metadataCacheBytes = 0, imageCacheBytes = 0 });
+    }
+
     [HttpGet("status")]
     [Authorize(Policy = Elevated)]
     public IActionResult Status()
@@ -85,6 +121,8 @@ public sealed class FireFlyController : ControllerBase
             rulesOverride = _runtime.Rules.HasOverride,
             rulesWarnings = _runtime.Rules.Warnings,
             sourceCount = _runtime.SourceCount,
+            metadataCacheBytes = _runtime.MetadataCache.SizeBytes(),
+            imageCacheBytes = _runtime.ImageCache.SizeBytes(),
             tmdbApiBases = _runtime.Rules.Tmdb.ApiBases,
             tmdbImageBases = _runtime.Rules.Tmdb.ImageBases,
             dataDir = _runtime.DataDir,

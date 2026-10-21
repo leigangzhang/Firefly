@@ -9,6 +9,13 @@
   var pollTimer = null;
 
   // ---------- 工具 ----------
+  // TMDb 图片改由插件取并缓存到本地：把 .../t/p/<尺寸>/<文件> 换成 FireFly/image/<尺寸>/<文件>。
+  // 收藏里存的旧地址也会被换掉；不是 TMDb 图片路径的地址原样返回
+  function tmdbImg(url) {
+    var m = url && /\/t\/p\/(w\d+|original)\/([A-Za-z0-9_-]+\.(?:jpe?g|png|svg|webp))$/i.exec(url);
+    return m ? window.ApiClient.getUrl('FireFly/image/' + m[1] + '/' + m[2]) : url;
+  }
+
   function el(tag, attrs, children) {
     var node = document.createElement(tag);
     Object.keys(attrs || {}).forEach(function (k) {
@@ -800,7 +807,7 @@
     var sub = [i.year, genres.join(' / ')].filter(Boolean).join(' · ');
     return el('div', { class: 'ff-card', onclick: function () { openDetail(i.kind, i.tmdbId); } }, [
       el('div', { class: 'ff-poster' }, [
-        i.posterUrl ? el('img', { src: i.posterUrl, loading: 'lazy', alt: i.title }) : el('div', { class: 'ff-noposter' }),
+        i.posterUrl ? el('img', { src: tmdbImg(i.posterUrl), loading: 'lazy', alt: i.title }) : el('div', { class: 'ff-noposter' }),
         ratingBadge(i.rating),
         i.inLibrary ? el('span', { class: 'ff-chip ff-in', text: '已在库' }) : null,
       ]),
@@ -887,9 +894,9 @@
     var facts = [d.certification ? el('span', { class: 'ff-cert', text: d.certification }) : null,
       el('span', { text: [d.releaseDate, d.genres.join(' / '), minutes(d.runtime)].filter(Boolean).join(' · ') })];
 
-    body.appendChild(el('div', { class: 'ff-hero', style: d.backdropUrl ? 'background-image:url("' + d.backdropUrl + '")' : '' }, [
+    body.appendChild(el('div', { class: 'ff-hero', style: d.backdropUrl ? 'background-image:url("' + tmdbImg(d.backdropUrl) + '")' : '' }, [
       el('div', { class: 'ff-hero-in' }, [
-        el('div', { class: 'ff-hero-poster' }, [d.posterUrl ? el('img', { src: d.posterUrl, alt: d.title }) : el('div', { class: 'ff-noposter' })]),
+        el('div', { class: 'ff-hero-poster' }, [d.posterUrl ? el('img', { src: tmdbImg(d.posterUrl), alt: d.title }) : el('div', { class: 'ff-noposter' })]),
         el('div', { class: 'ff-hero-info' }, [
           el('h1', { class: 'ff-h1' }, [d.title, d.year ? el('span', { class: 'ff-year', text: ' (' + d.year + ')' }) : null]),
           d.originalTitle ? el('div', { class: 'ff-dim', text: d.originalTitle }) : null,
@@ -929,7 +936,7 @@
     if (trailers.length) {
       var first = trailers[0];
       player.appendChild(el('button', { class: 'ff-trailer-cover', onclick: function () { play(first); },
-        style: d.backdropUrl ? 'background-image:url("' + d.backdropUrl + '")' : '' }, [el('span', { class: 'ff-play', text: '▶' })]));
+        style: d.backdropUrl ? 'background-image:url("' + tmdbImg(d.backdropUrl) + '")' : '' }, [el('span', { class: 'ff-play', text: '▶' })]));
       var picks = el('div', { class: 'ff-vids' }, trailers.map(function (v) {
         return el('button', { class: 'ff-fopt ff-vid', 'data-key': v.key, text: v.name || v.type, onclick: function () { play(v); } });
       }));
@@ -944,7 +951,7 @@
     d.directors.concat(d.cast).forEach(function (p, idx) {
       var isCrew = idx < d.directors.length;
       people.appendChild(el('div', { class: 'ff-person' }, [
-        p.profileUrl ? el('img', { src: p.profileUrl, loading: 'lazy', alt: p.name }) : el('div', { class: 'ff-noface', text: (p.name || '?').slice(0, 1) }),
+        p.profileUrl ? el('img', { src: tmdbImg(p.profileUrl), loading: 'lazy', alt: p.name }) : el('div', { class: 'ff-noface', text: (p.name || '?').slice(0, 1) }),
         el('div', { class: 'ff-person-name', text: p.name }),
         el('div', { class: 'ff-dim ff-small', text: isCrew ? p.role : (p.role || '') }),
         p.episodes ? el('div', { class: 'ff-dim ff-small', text: p.episodes + ' 集' }) : null,
@@ -1009,7 +1016,7 @@
       foot.appendChild(el('span', { text: '(' + e.season + 'x' + e.episode + (e.airDate ? ', ' + cnDate(e.airDate) : '') + ')' + (e.aired ? '' : ' 即将开播') }));
     }).catch(function () {});
     return el('div', { class: 'ff-season-card' }, [
-      el('div', { class: 'ff-season-poster' }, [s.posterUrl ? el('img', { src: s.posterUrl, loading: 'lazy', alt: s.name }) : el('div', { class: 'ff-noposter' })]),
+      el('div', { class: 'ff-season-poster' }, [s.posterUrl ? el('img', { src: tmdbImg(s.posterUrl), loading: 'lazy', alt: s.name }) : el('div', { class: 'ff-noposter' })]),
       el('div', { class: 'ff-season-body' }, [
         el('h3', { class: 'ff-season-title', text: s.name || ('第 ' + s.number + ' 季') }),
         el('div', { class: 'ff-season-meta' }, [
@@ -1040,7 +1047,7 @@
   function logos(k, list, link) {
     if (!list || !list.length) return k.indexOf('在线播放') === 0 ? fact(k, '暂无数据') : null;
     return el('div', { class: 'ff-fact' }, [el('div', { class: 'ff-fact-k', text: k }), el('div', { class: 'ff-logos' }, list.map(function (x) {
-      var inner = x.logoUrl ? el('img', { src: x.logoUrl, alt: x.name, title: x.name, loading: 'lazy' }) : el('span', { class: 'ff-chip', text: x.name });
+      var inner = x.logoUrl ? el('img', { src: tmdbImg(x.logoUrl), alt: x.name, title: x.name, loading: 'lazy' }) : el('span', { class: 'ff-chip', text: x.name });
       return link ? el('a', { href: link, target: '_blank', rel: 'noopener', title: x.name }, [inner]) : inner;
     }))]);
   }

@@ -7,7 +7,8 @@
     <div class="content-primary">
       <h2>萤火虫 FireFly</h2>
       <div id="ffStatus" class="fieldDescription" style="line-height:1.8"></div>
-      <div id="ffTmdbCheck" class="fieldDescription" style="margin-bottom:1.5em;line-height:1.8"></div>
+      <div id="ffTmdbCheck" class="fieldDescription" style="line-height:1.8"></div>
+      <button is="emby-button" type="button" id="ffClearCache" class="raised" style="margin:.5em 0 1.5em"><span>清除 TMDb 缓存</span></button>
       <form id="FireFlyConfigForm">
         <div class="inputContainer">
           <input is="emby-input" type="text" id="ThunderDownloadDir" label="迅雷下载目录" />
@@ -30,7 +31,7 @@
         </div>
         <div class="selectContainer">
           <select is="emby-select" id="TmdbImageBaseSelect" label="TMDb 图片地址"></select>
-          <div class="fieldDescription">海报由浏览器直接加载。</div>
+          <div class="fieldDescription">海报由插件取回并缓存到本地，浏览器只从 Jellyfin 加载。</div>
         </div>
         <div class="inputContainer" id="TmdbImageBaseCustom" hidden>
           <input is="emby-input" type="text" id="TmdbImageBase" label="自定义图片地址（如 https://image.tmdb.org/t/p）" />
@@ -109,6 +110,12 @@
         return select.selectedIndex === 0 ? '' : select.value;
       }
 
+      function mb(bytes) { return (bytes / 1048576).toFixed(1) + ' MB'; }
+
+      page.querySelector('#ffClearCache').addEventListener('click', function () {
+        ApiClient.ajax({ url: ApiClient.getUrl('FireFly/cache'), type: 'DELETE' }).then(loadStatus, loadStatus);
+      });
+
       function loadStatus() {
         ApiClient.ajax({ url: ApiClient.getUrl('FireFly/status'), type: 'GET', dataType: 'json' }).then(function (s) {
           fillBases(s);
@@ -120,25 +127,28 @@
             line('TMDb', s.tmdbConfigured ? '已配置' : '未配置', s.tmdbConfigured) +
             line('规则', '版本 ' + s.rulesVersion + (s.rulesOverride ? '（叠加了数据目录里的 rules.json）' : '') + '，可用搜索源 ' + s.sourceCount + ' 个', s.sourceCount > 0) +
             (s.rulesWarnings || []).map(function (w) { return line('规则提示', w, false); }).join('') +
+            line('缓存', '元数据 ' + mb(s.metadataCacheBytes) + '，图片 ' + mb(s.imageCacheBytes)) +
             line('数据目录', s.dataDir);
           checkTmdb(s.tmdbConfigured);
         });
       }
 
-      // 自检 TMDb：插件这边测接口和图片域名，再让浏览器真的加载一张海报（图片是浏览器直接取的）
+      // 自检 TMDb：插件这边测接口和图片域名，再让浏览器经插件的图片缓存真的加载一张海报
       function checkTmdb(configured) {
         var box = page.querySelector('#ffTmdbCheck');
         if (!configured) { box.innerHTML = ''; return; }
         box.innerHTML = line('TMDb 自检', '检查中…');
         ApiClient.ajax({ url: ApiClient.getUrl('FireFly/selfcheck/tmdb'), type: 'GET', dataType: 'json' }).then(function (c) {
-          box.innerHTML = line('TMDb 元数据', c.apiMessage, c.apiOk) + line('TMDb 图片（插件）', c.imageMessage, c.imageOk) +
-            '<div id="ffImgProbe">' + line('TMDb 图片（浏览器）', c.samplePosterUrl ? '检查中…' : '没有可试的海报') + '</div>';
+          box.innerHTML = line('TMDb 元数据', c.apiMessage, c.apiOk) + line('TMDb 图片', c.imageMessage, c.imageOk) +
+            '<div id="ffImgProbe">' + line('海报显示', c.samplePosterUrl ? '检查中…' : '没有可试的海报') + '</div>';
           if (!c.samplePosterUrl) return;
           var img = new Image();
           var probe = page.querySelector('#ffImgProbe');
-          img.onload = function () { probe.innerHTML = line('TMDb 图片（浏览器）', '可以加载', true); };
-          img.onerror = function () { probe.innerHTML = line('TMDb 图片（浏览器）', '加载失败，海报会显示不出来；可以换一个图片地址', false); };
-          img.src = c.samplePosterUrl;
+          img.onload = function () { probe.innerHTML = line('海报显示', '可以加载', true); };
+          img.onerror = function () { probe.innerHTML = line('海报显示', '加载失败，海报会显示不出来；可以换一个图片地址', false); };
+          // 走插件的图片缓存，和榜单里加载海报的方式一致
+          var m = /\/t\/p\/(w\d+|original)\/([^/]+)$/.exec(c.samplePosterUrl);
+          img.src = m ? ApiClient.getUrl('FireFly/image/' + m[1] + '/' + m[2]) : c.samplePosterUrl;
         }, function () {
           box.innerHTML = line('TMDb 自检', '请求失败', false);
         });

@@ -20,7 +20,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>TMDb 接口地址，配置页从规则里的候选地址中选，也可以自定义；空 = 第一个候选（api.tmdb.org）。</summary>
     public string TmdbApiBase { get; set; } = string.Empty;
 
-    /// <summary>TMDb 图片地址，同上；空 = 第一个候选（image.tmdb.org）。图片由浏览器直接加载。</summary>
+    /// <summary>TMDb 图片地址，同上；空 = 第一个候选（image.tmdb.org）。图片由插件取回并缓存。</summary>
     public string TmdbImageBase { get; set; } = string.Empty;
 
     /// <summary>详情页是否显示 YouTube 预告片。大陆网络不翻墙时 YouTube 打不开，默认关闭。</summary>

@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FireFly.Core.Models;
 using FireFly.Core.Rules;
+using FireFly.Core.Storage;
 
 namespace FireFly.Core.Metadata;
 
@@ -98,14 +100,23 @@ public sealed class TmdbClient
     private static readonly TimeSpan DetailTtl = TimeSpan.FromHours(6);
     private static readonly TimeSpan GenreTtl = TimeSpan.FromHours(24);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    /// <summary>网络请求失败时，落盘缓存里不超过这个时间的旧数据仍然拿来用。</summary>
+    private static readonly TimeSpan StaleLimit = TimeSpan.FromDays(30);
+    private static readonly string[] ImageSizes = { "w92", "w185", "w342", "w500", "w780", "w1280", "original" };
+    private static readonly System.Text.RegularExpressions.Regex ImageFile = new(@"^[A-Za-z0-9_-]{1,128}\.(jpg|jpeg|png|svg|webp)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     private readonly HttpClient _http;
     private readonly Func<TmdbSettings> _settings;
+    private readonly DiskCache? _metadataCache;
+    private readonly DiskCache? _imageCache;
     private readonly ConcurrentDictionary<string, (DateTimeOffset Expires, string Json)> _cache = new();
 
-    public TmdbClient(HttpClient http, Func<TmdbSettings> settings)
+    /// <summary>metadataCache / imageCache 为空时只用内存缓存、图片不经插件。</summary>
+    public TmdbClient(HttpClient http, Func<TmdbSettings> settings, DiskCache? metadataCache = null, DiskCache? imageCache = null)
     {
         _http = http;
         _settings = settings;
+        _metadataCache = metadataCache;
+        _imageCache = imageCache;
     }
 
     private string Images => _settings().Images;
@@ -261,7 +272,7 @@ public sealed class TmdbClient
 
     /// <summary>
     /// 自检：接口入口能否用当前 Key 取到热门，图片域名能否连上。
-    /// 图片最终由浏览器加载，所以顺带返回一张海报地址，配置页再在浏览器里试一次。
+    /// 顺带返回一张海报地址，配置页再让浏览器经插件的图片缓存加载一次，确认整条链路通。
     /// </summary>
     public async Task<TmdbCheck> CheckAsync(CancellationToken ct)
     {
@@ -324,21 +335,88 @@ public sealed class TmdbClient
             return hit.Json;
         }
 
-        using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        // 落盘缓存的键不含 API Key：换 Key 不影响缓存，缓存文件里也不留 Key
+        var diskKey = $"{settings.Api}{path}?language={language}{extra}";
+        if (_metadataCache?.Get(diskKey, ttl) is { } fresh)
         {
-            throw new HttpRequestException($"TMDb 返回 {(int)response.StatusCode}", null, response.StatusCode);
+            var cached = Encoding.UTF8.GetString(fresh.Data);
+            Remember(url, now + ttl - fresh.Age, cached);
+            return cached;
         }
 
-        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        string json;
+        try
+        {
+            using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"TMDb 返回 {(int)response.StatusCode}", null, response.StatusCode);
+            }
+
+            json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is HttpRequestException { StatusCode: null or >= System.Net.HttpStatusCode.InternalServerError } or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            // 连不上或 TMDb 出错时用旧缓存兜底；4xx（Key 错、条目不存在）照常报错
+            if (_metadataCache?.Get(diskKey, StaleLimit) is { } stale)
+            {
+                return Encoding.UTF8.GetString(stale.Data);
+            }
+
+            throw;
+        }
+
+        Remember(url, now + ttl, json);
+        _metadataCache?.Set(diskKey, Encoding.UTF8.GetBytes(json));
+        return json;
+    }
+
+    private void Remember(string url, DateTimeOffset expires, string json)
+    {
         if (_cache.Count > 500)
         {
             _cache.Clear();
         }
 
-        _cache[url] = (now + ttl, json);
-        return json;
+        _cache[url] = (expires, json);
     }
+
+    /// <summary>
+    /// 海报等图片：先查本地缓存，没有再从图片地址取并存下来。图片按路径不会变，缓存不过期，只按容量淘汰。
+    /// size / file 来自浏览器请求，只接受 TMDb 的尺寸和文件名格式，避免被当成任意地址的转发。
+    /// </summary>
+    public async Task<(byte[] Data, string ContentType)?> GetImageAsync(string size, string file, CancellationToken ct)
+    {
+        if (!ImageSizes.Contains(size) || !ImageFile.IsMatch(file))
+        {
+            return null;
+        }
+
+        var type = ContentType(file);
+        var key = size + "/" + file;
+        if (_imageCache?.Get(key) is { } hit)
+        {
+            return (hit.Data, type);
+        }
+
+        using var response = await _http.GetAsync($"{_settings().Images}/{size}/{file}", ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var data = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        _imageCache?.Set(key, data);
+        return (data, type);
+    }
+
+    private static string ContentType(string file) => Path.GetExtension(file).ToLowerInvariant() switch
+    {
+        ".png" => "image/png",
+        ".svg" => "image/svg+xml",
+        ".webp" => "image/webp",
+        _ => "image/jpeg",
+    };
 
     internal static TmdbDetail ParseDetail(MediaKind kind, JsonElement r, IReadOnlyList<string> watchRegions, DateOnly? today = null, string images = TmdbSettings.DefaultImageBase)
     {

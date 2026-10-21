@@ -814,6 +814,113 @@ public class TmdbSettingsTests
     }
 }
 
+public class CacheTests
+{
+    private sealed class Counting : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+
+        public bool Fail { get; set; }
+
+        public List<string> Urls { get; } = new();
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Calls++;
+            Urls.Add(request.RequestUri!.ToString());
+            if (Fail)
+            {
+                throw new HttpRequestException("连接被重置");
+            }
+
+            var image = request.RequestUri!.AbsolutePath.Contains("/t/p/");
+            var content = image
+                ? new ByteArrayContent(new byte[] { 1, 2, 3 })
+                : new StringContent("""{"page":1,"results":[{"id":1,"title":"沙丘","poster_path":"/p.jpg"}]}""");
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = content });
+        }
+    }
+
+    [Fact]
+    public void DiskCacheHonoursMaxAgeAndEvictsLeastRecentlyUsed()
+    {
+        using var dir = new TempDir();
+        var now = new DateTimeOffset(2026, 10, 21, 0, 0, 0, TimeSpan.Zero);
+        var cache = new DiskCache(dir.Path, ".bin", 25, () => now);
+        cache.Set("a", new byte[10]);
+        now = now.AddMinutes(1);
+        cache.Set("b", new byte[10]);
+        now = now.AddMinutes(1);
+        Assert.NotNull(cache.Get("a"));
+        Assert.Null(cache.Get("a", TimeSpan.FromSeconds(30)));
+
+        // 超过 25 字节：b 最久没用，先被删
+        now = now.AddMinutes(1);
+        cache.Set("c", new byte[10]);
+        cache.Prune();
+        Assert.Null(cache.Get("b"));
+        Assert.NotNull(cache.Get("a"));
+        Assert.NotNull(cache.Get("c"));
+
+        cache.Clear();
+        Assert.Equal(0, cache.SizeBytes());
+    }
+
+    [Fact]
+    public async Task MetadataSurvivesRestartAndFallsBackWhenOffline()
+    {
+        using var dir = new TempDir();
+        var handler = new Counting();
+        var http = new HttpClient(handler);
+        DiskCache Disk() => new(System.IO.Path.Combine(dir.Path, "tmdb"), ".json", 1024 * 1024);
+        var settings = () => new TmdbSettings("secret-key", "zh-CN");
+
+        await new TmdbClient(http, settings, Disk()).TrendingAsync(MediaKind.Movie, default);
+        Assert.Equal(1, handler.Calls);
+
+        // 新实例（相当于重启 Jellyfin）直接读落盘缓存，不再请求
+        var items = await new TmdbClient(http, settings, Disk()).TrendingAsync(MediaKind.Movie, default);
+        Assert.Equal(1, handler.Calls);
+        Assert.Equal("沙丘", items.Single().Title);
+
+        // 缓存文件里不留 API Key
+        Assert.DoesNotContain(Directory.GetFiles(System.IO.Path.Combine(dir.Path, "tmdb")), f => System.IO.File.ReadAllText(f).Contains("secret-key") || f.Contains("secret-key"));
+
+        // 过期后连不上 TMDb：用旧数据兜底
+        foreach (var f in Directory.GetFiles(System.IO.Path.Combine(dir.Path, "tmdb")))
+        {
+            System.IO.File.SetLastWriteTimeUtc(f, DateTime.UtcNow.AddDays(-2));
+        }
+
+        handler.Fail = true;
+        var stale = await new TmdbClient(http, settings, Disk()).TrendingAsync(MediaKind.Movie, default);
+        Assert.Equal("沙丘", stale.Single().Title);
+
+        // 没有缓存时照常报错
+        await Assert.ThrowsAsync<HttpRequestException>(() => new TmdbClient(http, settings, Disk()).TrendingAsync(MediaKind.Series, default));
+    }
+
+    [Fact]
+    public async Task ImagesAreFetchedOnceAndOnlyTmdbPathsAreAccepted()
+    {
+        using var dir = new TempDir();
+        var handler = new Counting();
+        var client = new TmdbClient(new HttpClient(handler), () => new TmdbSettings("k", "zh-CN", ImageBase: "https://img.example.com/t/p"), imageCache: new DiskCache(dir.Path, ".img", 1024 * 1024));
+
+        var first = await client.GetImageAsync("w342", "abc_D-1.jpg", default);
+        var second = await client.GetImageAsync("w342", "abc_D-1.jpg", default);
+        Assert.Equal(new byte[] { 1, 2, 3 }, first!.Value.Data);
+        Assert.Equal("image/jpeg", second!.Value.ContentType);
+        Assert.Equal(1, handler.Calls);
+        Assert.Equal("https://img.example.com/t/p/w342/abc_D-1.jpg", handler.Urls.Single());
+
+        Assert.Null(await client.GetImageAsync("w9999", "abc.jpg", default));
+        Assert.Null(await client.GetImageAsync("w342", "..%2Fsecret.jpg", default));
+        Assert.Null(await client.GetImageAsync("w342", "a.exe", default));
+        Assert.Equal(1, handler.Calls);
+    }
+}
+
 public class DiscoverTests
 {
     private static readonly DiscoverRule Rule = RulesLoader.LoadDefault().Discover;
