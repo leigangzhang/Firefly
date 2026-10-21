@@ -28,17 +28,19 @@
         <div class="inputContainer">
           <input is="emby-input" type="text" id="TmdbLanguage" label="TMDb 语言" />
         </div>
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="TmdbApiBase" label="TMDb 接口地址" />
-          <div class="fieldDescription">留空使用 https://api.tmdb.org/3。默认入口打不开时，在这里换成可用的地址。</div>
+        <div class="selectContainer">
+          <select is="emby-select" id="TmdbApiBaseSelect" label="TMDb 接口地址"></select>
+          <div class="fieldDescription">插件直连 TMDb，不经过任何中转。默认地址打不开时换一个，或选"自定义"填社区提供的地址。</div>
         </div>
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="TmdbImageBase" label="TMDb 图片地址" />
-          <div class="fieldDescription">留空使用 https://image.tmdb.org/t/p。海报由浏览器直接加载。</div>
+        <div class="inputContainer" id="TmdbApiBaseCustom" hidden>
+          <input is="emby-input" type="text" id="TmdbApiBase" label="自定义接口地址（如 https://api.tmdb.org/3）" />
         </div>
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="TmdbProxy" label="TMDb 代理" />
-          <div class="fieldDescription">插件访问 TMDb 接口用的代理，如 http://127.0.0.1:7890；留空为直连。不影响浏览器加载图片。</div>
+        <div class="selectContainer">
+          <select is="emby-select" id="TmdbImageBaseSelect" label="TMDb 图片地址"></select>
+          <div class="fieldDescription">海报由浏览器直接加载。</div>
+        </div>
+        <div class="inputContainer" id="TmdbImageBaseCustom" hidden>
+          <input is="emby-input" type="text" id="TmdbImageBase" label="自定义图片地址（如 https://image.tmdb.org/t/p）" />
         </div>
         <div class="checkboxContainer">
           <label>
@@ -58,8 +60,12 @@
   <script type="text/javascript">
     (function () {
       var pluginId = '4f1d2c8e-9b7a-4e35-8c61-f1ae0f17f1f1';
-      var fields = ['ThunderDownloadDir', 'MovieLibraryPath', 'SeriesLibraryPath', 'TmdbApiKey', 'TmdbLanguage', 'TmdbApiBase', 'TmdbImageBase', 'TmdbProxy', 'PublisherKeywords'];
+      var fields = ['ThunderDownloadDir', 'MovieLibraryPath', 'SeriesLibraryPath', 'TmdbApiKey', 'TmdbLanguage', 'PublisherKeywords'];
       var checks = ['ShowTrailers'];
+      // 下拉选的地址：候选来自规则文件，第一项是默认；选"自定义"时显示输入框
+      var bases = [{ key: 'TmdbApiBase', options: 'tmdbApiBases' }, { key: 'TmdbImageBase', options: 'tmdbImageBases' }];
+      var CUSTOM = 'custom';
+      var config = null;
       var page = document.querySelector('#FireFlyConfigPage');
 
       function esc(text) {
@@ -68,8 +74,36 @@
       function line(label, value, ok) {
         return '<div>' + esc(label) + '：<b style="color:' + (ok === false ? '#ff8a80' : 'inherit') + '">' + esc(value) + '</b></div>';
       }
+      function fillBases(s) {
+        bases.forEach(function (b) {
+          var select = page.querySelector('#' + b.key + 'Select');
+          var options = s[b.options] || [];
+          var current = (config && config[b.key]) || '';
+          var known = !current || options.some(function (o) { return o.value === current; });
+          select.innerHTML = options.map(function (o) {
+            return '<option value="' + esc(o.value) + '">' + esc(o.label) + '</option>';
+          }).join('') + '<option value="' + CUSTOM + '">自定义…</option>';
+          select.value = !current ? (options[0] ? options[0].value : CUSTOM) : (known ? current : CUSTOM);
+          page.querySelector('#' + b.key).value = known ? '' : current;
+          toggleCustom(b.key);
+        });
+      }
+      function toggleCustom(key) {
+        page.querySelector('#' + key + 'Custom').hidden = page.querySelector('#' + key + 'Select').value !== CUSTOM;
+      }
+      bases.forEach(function (b) {
+        page.querySelector('#' + b.key + 'Select').addEventListener('change', function () { toggleCustom(b.key); });
+      });
+      // 选的是第一项（默认）时存空值，以后规则里的默认地址变了会自动跟着变
+      function readBase(key) {
+        var select = page.querySelector('#' + key + 'Select');
+        if (select.value === CUSTOM) return page.querySelector('#' + key).value.trim();
+        return select.selectedIndex === 0 ? '' : select.value;
+      }
+
       function loadStatus() {
         ApiClient.ajax({ url: ApiClient.getUrl('FireFly/status'), type: 'GET', dataType: 'json' }).then(function (s) {
+          fillBases(s);
           page.querySelector('#ffStatus').innerHTML =
             line('版本', s.version) +
             line('下载目录', s.downloadDir + (s.downloadDirExists ? '' : '（不存在，请创建并在迅雷里设置）'), s.downloadDirExists) +
@@ -104,21 +138,24 @@
 
       page.addEventListener('pageshow', function () {
         Dashboard.showLoadingMsg();
-        ApiClient.getPluginConfiguration(pluginId).then(function (config) {
-          fields.forEach(function (f) { page.querySelector('#' + f).value = config[f] || ''; });
-          checks.forEach(function (f) { page.querySelector('#' + f).checked = !!config[f]; });
+        ApiClient.getPluginConfiguration(pluginId).then(function (c) {
+          config = c;
+          fields.forEach(function (f) { page.querySelector('#' + f).value = c[f] || ''; });
+          checks.forEach(function (f) { page.querySelector('#' + f).checked = !!c[f]; });
           Dashboard.hideLoadingMsg();
+          loadStatus();
         });
-        loadStatus();
       });
 
       page.querySelector('#FireFlyConfigForm').addEventListener('submit', function (e) {
         e.preventDefault();
         Dashboard.showLoadingMsg();
-        ApiClient.getPluginConfiguration(pluginId).then(function (config) {
-          fields.forEach(function (f) { config[f] = page.querySelector('#' + f).value.trim(); });
-          checks.forEach(function (f) { config[f] = page.querySelector('#' + f).checked; });
-          ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+        ApiClient.getPluginConfiguration(pluginId).then(function (c) {
+          fields.forEach(function (f) { c[f] = page.querySelector('#' + f).value.trim(); });
+          checks.forEach(function (f) { c[f] = page.querySelector('#' + f).checked; });
+          bases.forEach(function (b) { c[b.key] = readBase(b.key); });
+          config = c;
+          ApiClient.updatePluginConfiguration(pluginId, c).then(function (result) {
             Dashboard.processPluginConfigurationUpdateResult(result);
             loadStatus();
           });

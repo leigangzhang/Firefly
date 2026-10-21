@@ -497,6 +497,15 @@ public class RulesTests
     }
 
     [Fact]
+    public void DefaultRulesOfferMainlandReachableTmdbBasesFirst()
+    {
+        var tmdb = RulesLoader.LoadDefault().Tmdb;
+        Assert.Equal(TmdbSettings.DefaultApiBase, tmdb.ApiBases[0].Value);
+        Assert.Equal(TmdbSettings.DefaultImageBase, tmdb.ImageBases[0].Value);
+        Assert.True(tmdb.ApiBases.Count > 1);
+    }
+
+    [Fact]
     public void BrokenOverrideFileFallsBackToBuiltin()
     {
         using var dir = new TempDir();
@@ -773,7 +782,7 @@ public class TmdbSettingsTests
     {
         var recorder = new Recorder();
         var http = new HttpClient(recorder);
-        var client = new TmdbClient(() => http, () => new TmdbSettings("key", "zh-CN", "https://tmdb.example.com/3", "https://img.example.com/t/p"));
+        var client = new TmdbClient(http, () => new TmdbSettings("key", "zh-CN", "https://tmdb.example.com/3", "https://img.example.com/t/p"));
 
         var items = await client.TrendingAsync(MediaKind.Movie, default);
         Assert.StartsWith("https://tmdb.example.com/3/trending/movie/week?api_key=key", recorder.Requests[0].RequestUri!.ToString());
@@ -790,7 +799,7 @@ public class TmdbSettingsTests
     public async Task CheckReportsUnreachableHosts()
     {
         var http = new HttpClient(new FailingHandler());
-        var client = new TmdbClient(() => http, () => new TmdbSettings("key", "zh-CN"));
+        var client = new TmdbClient(http, () => new TmdbSettings("key", "zh-CN"));
         var check = await client.CheckAsync(default);
         Assert.False(check.ApiOk);
         Assert.False(check.ImageOk);

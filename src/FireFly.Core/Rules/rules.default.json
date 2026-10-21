@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "version": 3,
+  "version": 4,
   "updatedAt": "2026-10-21",
   "sources": [
     {
@@ -71,6 +71,15 @@
     ".vtt"
   ],
   "minVideoBytes": 52428800,
+  "tmdb": {
+    "apiBases": [
+      { "value": "https://api.tmdb.org/3", "label": "api.tmdb.org（推荐，中国大陆可直连）" },
+      { "value": "https://api.themoviedb.org/3", "label": "api.themoviedb.org（官方主域名，部分网络解析异常）" }
+    ],
+    "imageBases": [
+      { "value": "https://image.tmdb.org/t/p", "label": "image.tmdb.org（官方，中国大陆可直连）" }
+    ]
+  },
   "discover": {
     "categories": [
       {

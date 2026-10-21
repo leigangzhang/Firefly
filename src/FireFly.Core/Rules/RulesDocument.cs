@@ -34,6 +34,9 @@ public sealed class RulesDocument
     /// <summary>热门榜单的筛选项目录（分类、地区、出品、分级）。TMDb 的公司 / 电视网 ID 写错时改这里即可。</summary>
     public DiscoverRule Discover { get; set; } = new();
 
+    /// <summary>配置页下拉框里可选的 TMDb 接口 / 图片地址，第一项是默认值。入口被屏蔽时由社区在这里补充可用地址。</summary>
+    public TmdbRule Tmdb { get; set; } = new();
+
     /// <summary>是否叠加了数据目录里的 rules.json。</summary>
     [JsonIgnore]
     public bool HasOverride { get; set; }
@@ -123,6 +126,13 @@ public sealed class JsonApiFields
     public string FilePath { get; set; } = "path";
 
     public string FileSize { get; set; } = "size";
+}
+
+public sealed class TmdbRule
+{
+    public List<FilterOption> ApiBases { get; set; } = new();
+
+    public List<FilterOption> ImageBases { get; set; } = new();
 }
 
 public sealed class ThunderRule

@@ -85,6 +85,8 @@ public sealed class FireFlyController : ControllerBase
             rulesOverride = _runtime.Rules.HasOverride,
             rulesWarnings = _runtime.Rules.Warnings,
             sourceCount = _runtime.SourceCount,
+            tmdbApiBases = _runtime.Rules.Tmdb.ApiBases,
+            tmdbImageBases = _runtime.Rules.Tmdb.ImageBases,
             dataDir = _runtime.DataDir,
             libraries = (_runtime.Host as JellyfinMediaHost)?.AllLocations().Select(l => new { l.Library, l.Type, l.Path }),
         });

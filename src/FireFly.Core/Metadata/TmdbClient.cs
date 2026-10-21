@@ -98,12 +98,11 @@ public sealed class TmdbClient
     private static readonly TimeSpan DetailTtl = TimeSpan.FromHours(6);
     private static readonly TimeSpan GenreTtl = TimeSpan.FromHours(24);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private readonly Func<HttpClient> _http;
+    private readonly HttpClient _http;
     private readonly Func<TmdbSettings> _settings;
     private readonly ConcurrentDictionary<string, (DateTimeOffset Expires, string Json)> _cache = new();
 
-    /// <summary>http 每次请求时取，代理设置改了以后用新的客户端。</summary>
-    public TmdbClient(Func<HttpClient> http, Func<TmdbSettings> settings)
+    public TmdbClient(HttpClient http, Func<TmdbSettings> settings)
     {
         _http = http;
         _settings = settings;
@@ -289,7 +288,7 @@ public sealed class TmdbClient
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(10));
             using var request = new HttpRequestMessage(HttpMethod.Head, sample ?? settings.Images + LogoSize + "/");
-            using var response = await _http().SendAsync(request, timeout.Token).ConfigureAwait(false);
+            using var response = await _http.SendAsync(request, timeout.Token).ConfigureAwait(false);
             (imageOk, imageMessage) = (true, $"{settings.Images} 可达（HTTP {(int)response.StatusCode}）");
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
@@ -325,7 +324,7 @@ public sealed class TmdbClient
             return hit.Json;
         }
 
-        using var response = await _http().GetAsync(url, ct).ConfigureAwait(false);
+        using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException($"TMDb 返回 {(int)response.StatusCode}", null, response.StatusCode);
