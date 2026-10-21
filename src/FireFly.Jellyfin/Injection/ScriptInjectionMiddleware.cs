@@ -10,8 +10,13 @@ namespace FireFly.Jellyfin.Injection;
 public sealed class ScriptInjectionMiddleware
 {
     private const string Marker = "FireFly/web/firefly.js";
+
+    // defer 脚本按出现顺序执行：词典、公共工具（firefly.js）、抽屉、榜单、详情页（最后一个负责启动）
+    private static readonly string[] Scripts = ["firefly-i18n.js", "firefly.js", "firefly-drawer.js", "firefly-hot.js", "firefly-detail.js"];
+
     private static readonly string Payload =
-        $"<link rel=\"stylesheet\" href=\"/FireFly/web/firefly.css?v={Version}\"><script defer src=\"/FireFly/web/firefly-i18n.js?v={Version}\"></script><script defer src=\"/{Marker}?v={Version}\"></script>";
+        $"<link rel=\"stylesheet\" href=\"/FireFly/web/firefly.css?v={Version}\">" +
+        string.Concat(Scripts.Select(s => $"<script defer src=\"/FireFly/web/{s}?v={Version}\"></script>"));
 
     private readonly RequestDelegate _next;
 

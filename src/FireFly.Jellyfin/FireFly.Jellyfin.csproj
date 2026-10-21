@@ -24,6 +24,9 @@
   <ItemGroup>
     <EmbeddedResource Include="Web/firefly.js" LogicalName="FireFly.Jellyfin.Web.firefly.js" />
     <EmbeddedResource Include="Web/firefly-i18n.js" LogicalName="FireFly.Jellyfin.Web.firefly-i18n.js" />
+    <EmbeddedResource Include="Web/firefly-drawer.js" LogicalName="FireFly.Jellyfin.Web.firefly-drawer.js" />
+    <EmbeddedResource Include="Web/firefly-hot.js" LogicalName="FireFly.Jellyfin.Web.firefly-hot.js" />
+    <EmbeddedResource Include="Web/firefly-detail.js" LogicalName="FireFly.Jellyfin.Web.firefly-detail.js" />
     <EmbeddedResource Include="Web/firefly.css" LogicalName="FireFly.Jellyfin.Web.firefly.css" />
     <EmbeddedResource Include="Configuration/configPage.html" LogicalName="FireFly.Jellyfin.Configuration.configPage.html" />
   </ItemGroup>

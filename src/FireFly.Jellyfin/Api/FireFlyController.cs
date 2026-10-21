@@ -57,8 +57,8 @@ public sealed class FireFlyController : ControllerBase
     {
         var (resource, type) = name switch
         {
-            "firefly.js" => ("FireFly.Jellyfin.Web.firefly.js", "application/javascript; charset=utf-8"),
-            "firefly-i18n.js" => ("FireFly.Jellyfin.Web.firefly-i18n.js", "application/javascript; charset=utf-8"),
+            "firefly.js" or "firefly-i18n.js" or "firefly-drawer.js" or "firefly-hot.js" or "firefly-detail.js"
+                => ("FireFly.Jellyfin.Web." + name, "application/javascript; charset=utf-8"),
             "firefly.css" => ("FireFly.Jellyfin.Web.firefly.css", "text/css; charset=utf-8"),
             _ => (null, null),
         };
