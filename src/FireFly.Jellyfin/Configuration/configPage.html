@@ -21,19 +21,12 @@
           <input is="emby-input" type="text" id="SeriesLibraryPath" label="剧集库目录" />
           <div class="fieldDescription">留空则自动使用 Jellyfin 第一个"节目"媒体库。</div>
         </div>
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="TmdbApiKey" label="TMDb API Key" />
-          <div class="fieldDescription">用于"发现"热门榜单，在 themoviedb.org 账号设置里免费申请。只保存在本机。</div>
-        </div>
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="TmdbLanguage" label="TMDb 语言" />
-        </div>
         <div class="selectContainer">
-          <select is="emby-select" id="TmdbApiBaseSelect" label="TMDb 接口地址"></select>
+          <select is="emby-select" id="TmdbApiBaseSelect" label="TMDb 元数据地址"></select>
           <div class="fieldDescription">插件直连 TMDb，不经过任何中转。默认地址打不开时换一个，或选"自定义"填社区提供的地址。</div>
         </div>
         <div class="inputContainer" id="TmdbApiBaseCustom" hidden>
-          <input is="emby-input" type="text" id="TmdbApiBase" label="自定义接口地址（如 https://api.tmdb.org/3）" />
+          <input is="emby-input" type="text" id="TmdbApiBase" label="自定义元数据地址（如 https://api.tmdb.org/3）" />
         </div>
         <div class="selectContainer">
           <select is="emby-select" id="TmdbImageBaseSelect" label="TMDb 图片地址"></select>
@@ -41,6 +34,21 @@
         </div>
         <div class="inputContainer" id="TmdbImageBaseCustom" hidden>
           <input is="emby-input" type="text" id="TmdbImageBase" label="自定义图片地址（如 https://image.tmdb.org/t/p）" />
+        </div>
+        <div class="selectContainer">
+          <select is="emby-select" id="TmdbLanguage" label="TMDb 语言">
+            <option value="zh-CN">简体中文（zh-CN）</option>
+            <option value="zh-TW">繁體中文・台灣（zh-TW）</option>
+            <option value="zh-HK">繁體中文・香港（zh-HK）</option>
+            <option value="en-US">English（en-US）</option>
+            <option value="ja-JP">日本語（ja-JP）</option>
+            <option value="ko-KR">한국어（ko-KR）</option>
+          </select>
+          <div class="fieldDescription">片名、简介、类型等元数据的语言。</div>
+        </div>
+        <div class="inputContainer">
+          <input is="emby-input" type="text" id="TmdbApiKey" label="TMDb API Key" />
+          <div class="fieldDescription">用于"发现"热门榜单，在 themoviedb.org 账号设置里免费申请。只保存在本机。</div>
         </div>
         <div class="checkboxContainer">
           <label>
@@ -123,7 +131,7 @@
         if (!configured) { box.innerHTML = ''; return; }
         box.innerHTML = line('TMDb 自检', '检查中…');
         ApiClient.ajax({ url: ApiClient.getUrl('FireFly/selfcheck/tmdb'), type: 'GET', dataType: 'json' }).then(function (c) {
-          box.innerHTML = line('TMDb 接口', c.apiMessage, c.apiOk) + line('TMDb 图片（插件）', c.imageMessage, c.imageOk) +
+          box.innerHTML = line('TMDb 元数据', c.apiMessage, c.apiOk) + line('TMDb 图片（插件）', c.imageMessage, c.imageOk) +
             '<div id="ffImgProbe">' + line('TMDb 图片（浏览器）', c.samplePosterUrl ? '检查中…' : '没有可试的海报') + '</div>';
           if (!c.samplePosterUrl) return;
           var img = new Image();
@@ -140,7 +148,12 @@
         Dashboard.showLoadingMsg();
         ApiClient.getPluginConfiguration(pluginId).then(function (c) {
           config = c;
+          var lang = page.querySelector('#TmdbLanguage');
+          if (c.TmdbLanguage && !Array.prototype.some.call(lang.options, function (o) { return o.value === c.TmdbLanguage; })) {
+            lang.appendChild(new Option(c.TmdbLanguage, c.TmdbLanguage));
+          }
           fields.forEach(function (f) { page.querySelector('#' + f).value = c[f] || ''; });
+          if (!lang.value) lang.value = 'zh-CN';
           checks.forEach(function (f) { page.querySelector('#' + f).checked = !!c[f]; });
           Dashboard.hideLoadingMsg();
           loadStatus();
