@@ -748,6 +748,14 @@
         opts.appendChild(el('button', {
           class: 'ff-fopt' + (active ? ' ff-on' : ''), text: o.label,
           onclick: function () {
+            // 再点一次已选中的项：取消选择，回到默认值（推荐回到"最热"，其他回到"全部"）；分类没有"不选"，保持不变
+            if (active) {
+              if (isCat || !o.value || (row.key === 'sort' && o.value === DEFAULT_SORT)) return;
+              if (row.key === 'sort') hot.state.sort = DEFAULT_SORT; else delete hot.state[row.key];
+              renderFilters();
+              reload();
+              return;
+            }
             if (o.value) hot.state[row.key] = o.value; else delete hot.state[row.key];
             if (isCat) { hot.state = { category: o.value, sort: DEFAULT_SORT, region: hot.state.region, time: hot.state.time }; loadFilters(); return; }
             renderFilters();
