@@ -58,6 +58,7 @@ public sealed class FireFlyController : ControllerBase
         var (resource, type) = name switch
         {
             "firefly.js" => ("FireFly.Jellyfin.Web.firefly.js", "application/javascript; charset=utf-8"),
+            "firefly-i18n.js" => ("FireFly.Jellyfin.Web.firefly-i18n.js", "application/javascript; charset=utf-8"),
             "firefly.css" => ("FireFly.Jellyfin.Web.firefly.css", "text/css; charset=utf-8"),
             _ => (null, null),
         };
@@ -100,6 +101,11 @@ public sealed class FireFlyController : ControllerBase
         _runtime.ImageCache.Clear();
         return ApiJson(new { metadataCacheBytes = 0, imageCacheBytes = 0 });
     }
+
+    /// <summary>前端界面用的设置：界面文字跟随 TMDb 语言。</summary>
+    [HttpGet("ui")]
+    [Authorize(Policy = Elevated)]
+    public IActionResult Ui() => ApiJson(new { language = _runtime.TmdbLanguage });
 
     [HttpGet("status")]
     [Authorize(Policy = Elevated)]

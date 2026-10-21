@@ -23,6 +23,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Web/firefly.js" LogicalName="FireFly.Jellyfin.Web.firefly.js" />
+    <EmbeddedResource Include="Web/firefly-i18n.js" LogicalName="FireFly.Jellyfin.Web.firefly-i18n.js" />
     <EmbeddedResource Include="Web/firefly.css" LogicalName="FireFly.Jellyfin.Web.firefly.css" />
     <EmbeddedResource Include="Configuration/configPage.html" LogicalName="FireFly.Jellyfin.Configuration.configPage.html" />
   </ItemGroup>

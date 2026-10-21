@@ -4,6 +4,13 @@
   if (window.__fireflyLoaded) return;
   window.__fireflyLoaded = true;
 
+  // 界面文字跟随 TMDb 语言，词条在 firefly-i18n.js
+  var I18N = window.FireFlyI18n;
+  function T(zh, vars) { return I18N ? I18N.t(zh, vars) : zh; }
+  T.server = function (text) { return I18N ? I18N.server(text) : text; };
+  T.release = function (name) { return I18N ? I18N.release(name) : name; };
+  T.language = function () { return I18N ? I18N.language() : 'zh-CN'; };
+
   var isAdmin = false;
   var pendingId = null;
   var pollTimer = null;
@@ -40,7 +47,7 @@
       .then(function (res) {
         return res.text().then(function (text) {
           var data = text ? JSON.parse(text) : null;
-          if (!res.ok) { var err = new Error((data && data.error) || ('请求失败 ' + res.status)); err.status = res.status; err.data = data; throw err; }
+          if (!res.ok) { var err = new Error((data && data.error ? T.server(data.error) : T('请求失败 {n}', { n: res.status }))); err.status = res.status; err.data = data; throw err; }
           return data;
         });
       });
@@ -62,13 +69,13 @@
     var body = el('div', { class: 'ff-dbody' });
     var title = el('div', { class: 'ff-dtitle' });
     var sub = el('div', { class: 'ff-dsub' });
-    var refresh = el('button', { class: 'ff-icon-btn', title: '重新搜索', 'aria-label': '重新搜索', style: 'display:none', onclick: function () { if (drawer && drawer.view === 'search') runSearch(true); } }, [icon('refresh')]);
+    var refresh = el('button', { class: 'ff-icon-btn', title: T('重新搜索'), 'aria-label': T('重新搜索'), style: 'display:none', onclick: function () { if (drawer && drawer.view === 'search') runSearch(true); } }, [icon('refresh')]);
     var backdrop = el('div', { class: 'ff-backdrop', onclick: closeDrawer });
     var panel = el('aside', { class: 'ff-drawer', role: 'dialog', 'aria-modal': 'true' }, [
       el('div', { class: 'ff-dhead' }, [
         el('div', { class: 'ff-dheading' }, [sub, title]),
         refresh,
-        el('button', { class: 'ff-icon-btn', title: '关闭（Esc）', 'aria-label': '关闭', onclick: closeDrawer }, [icon('close')]),
+        el('button', { class: 'ff-icon-btn', title: T('关闭（Esc）'), 'aria-label': T('关闭'), onclick: closeDrawer }, [icon('close')]),
       ]),
       tabs,
       body,
@@ -104,8 +111,8 @@
     var d = drawer;
     d.tabs.innerHTML = '';
     var list = [];
-    if (d.search) list.push({ key: 'search', label: '资源版本' });
-    list.push({ key: 'tasks', label: '下载任务' });
+    if (d.search) list.push({ key: 'search', label: T('资源版本') });
+    list.push({ key: 'tasks', label: T('下载任务') });
     list.forEach(function (t) {
       d.tabs.appendChild(el('button', {
         class: 'ff-tab' + (d.view === t.key ? ' ff-on' : ''), role: 'tab', 'data-tab': t.key,
@@ -182,7 +189,7 @@
 
   function showSearchView() {
     var s = drawer.search;
-    var content = switchView('search', s.label, '获取资源');
+    var content = switchView('search', s.label, T('获取资源'));
     var seasonBar = el('div', { class: 'ff-seasonbar' });
     var packSlot = el('div', { class: 'ff-packslot' });
     var list = el('div', { class: 'ff-rlist' });
@@ -208,12 +215,12 @@
     var s = drawer.search;
     bar.innerHTML = '';
     if (!s.seasons || s.seasons.length < 2) {
-      if (s.seasons) bar.appendChild(el('span', { class: 'ff-dim', text: '第 ' + s.seasons[0] + ' 季' }));
+      if (s.seasons) bar.appendChild(el('span', { class: 'ff-dim', text: T('第 {n} 季', { n: s.seasons[0] }) }));
       return;
     }
     s.seasons.forEach(function (n) {
       bar.appendChild(el('button', {
-        class: 'ff-fopt' + (n === s.request.season ? ' ff-on' : ''), text: '第 ' + n + ' 季',
+        class: 'ff-fopt' + (n === s.request.season ? ' ff-on' : ''), text: T('第 {n} 季', { n: n }),
         onclick: function () { if (s.request.season === n) return; s.request.season = n; s.packTab = null; renderSeasons(bar); runSearch(false); },
       }));
     });
@@ -228,7 +235,7 @@
     removeRail();
     if (s.packSlot) s.packSlot.innerHTML = '';
     skeleton(list, 4);
-    list.insertBefore(el('div', { class: 'ff-hint', text: refresh ? '正在重新搜索…' : '正在搜索资源…' }), list.firstChild);
+    list.insertBefore(el('div', { class: 'ff-hint', text: refresh ? T('正在重新搜索…') : T('正在搜索资源…') }), list.firstChild);
     s.request.refresh = refresh;
     var mine = s;
     var season = s.request.season;
@@ -249,7 +256,7 @@
         if (e && e.name === 'AbortError') return;
         if (!current()) return;
         var hint = mine.list.querySelector('.ff-more');
-        if (hint) hint.textContent = '补充搜索失败，可点右上角刷新重试';
+        if (hint) hint.textContent = T('补充搜索失败，可点右上角刷新重试');
       });
     }
 
@@ -261,10 +268,10 @@
         if (drawer.view === 'search') {
           if (r.needsFallback && !r.releases.length) {
             skeleton(list, 4);
-            list.insertBefore(el('div', { class: 'ff-hint ff-more', text: '没有找到优选资源，正在扩大搜索范围…' }), list.firstChild);
+            list.insertBefore(el('div', { class: 'ff-hint ff-more', text: T('没有找到优选资源，正在扩大搜索范围…') }), list.firstChild);
           } else {
             renderReleases(r);
-            if (r.needsFallback) list.insertBefore(el('div', { class: 'ff-hint ff-more', text: '正在补充更多资源…' }), list.firstChild);
+            if (r.needsFallback) list.insertBefore(el('div', { class: 'ff-hint ff-more', text: T('正在补充更多资源…') }), list.firstChild);
           }
         }
         if (r.needsFallback) fetchFallback();
@@ -276,12 +283,12 @@
           retried = true;
           if (!drawer || drawer.search !== mine || mine.request.season !== season || mine.searchController !== controller) return;
           skeleton(list, 4);
-          list.insertBefore(el('div', { class: 'ff-hint', text: '网络连接中断，正在重试…' }), list.firstChild);
+          list.insertBefore(el('div', { class: 'ff-hint', text: T('网络连接中断，正在重试…') }), list.firstChild);
           setTimeout(fetchSearch, 1200);
           return;
         }
         if (drawer && drawer.search === mine && drawer.view === 'search') {
-          message(list, e.status ? e.message : '网络连接中断，请检查 Jellyfin 服务后重试', 'ff-error');
+          message(list, e.status ? e.message : T('网络连接中断，请检查 Jellyfin 服务后重试'), 'ff-error');
         }
       });
     }
@@ -292,8 +299,8 @@
   // 版本标签：优选、分辨率、HDR、编码等
   function chips(t, preferred) {
     var main = resLabel(t.resolution);
-    return [preferred ? el('span', { class: 'ff-chip ff-chip-pub', text: '优选' }) : null, main ? el('span', { class: 'ff-chip ff-chip-hi', text: main }) : null]
-      .concat([t.hdr, t.codec, t.mediaSource, t.audio, t.subtitles].filter(Boolean).map(function (c) { return el('span', { class: 'ff-chip', text: c }); }));
+    return [preferred ? el('span', { class: 'ff-chip ff-chip-pub', text: T('优选') }) : null, main ? el('span', { class: 'ff-chip ff-chip-hi', text: main }) : null]
+      .concat([t.hdr, t.codec, t.mediaSource, t.audio, t.subtitles].filter(Boolean).map(function (c) { return el('span', { class: 'ff-chip', text: T(c) }); }));
   }
 
   function renderReleases(r) {
@@ -302,15 +309,15 @@
     list.innerHTML = '';
     removeRail();
     if (s.packSlot) s.packSlot.innerHTML = '';
-    if (r.sourceErrors) list.appendChild(el('div', { class: 'ff-note ff-error', text: '部分资源源暂时不可用，结果可能不全，稍后可点右上角刷新' }));
+    if (r.sourceErrors) list.appendChild(el('div', { class: 'ff-note ff-error', text: T('部分资源源暂时不可用，结果可能不全，稍后可点右上角刷新') }));
     if (!r.releases.length) {
-      emptyState(list.appendChild(el('div')), 'search_off', '没有找到合适的资源', el('div', { class: 'ff-dim ff-small', text: '可以稍后刷新再试，或换一季' }));
+      emptyState(list.appendChild(el('div')), 'search_off', T('没有找到合适的资源'), el('div', { class: 'ff-dim ff-small', text: T('可以稍后刷新再试，或换一季') }));
       return;
     }
 
     // 电影：直接列出全部版本
     if (r.query.kind !== 'Series') {
-      list.appendChild(el('div', { class: 'ff-hint', text: '共 ' + r.releases.length + ' 个版本' + (r.fromCache ? '（缓存结果，可点右上角刷新）' : '') }));
+      list.appendChild(el('div', { class: 'ff-hint', text: T('共 {n} 个版本', { n: r.releases.length }) + (r.fromCache ? T('（缓存结果，可点右上角刷新）') : '') }));
       var box = list.appendChild(el('div', { class: 'ff-rlist' }));
       r.releases.forEach(function (rel, idx) { box.appendChild(releaseCard(r, rel, idx)); });
       return;
@@ -354,7 +361,7 @@
       current.count++;
       body.appendChild(releaseCard(r, rel, idx));
     });
-    eps.forEach(function (g) { g.head.textContent = epLabel(g.episode) + ' · ' + g.count + ' 个版本'; });
+    eps.forEach(function (g) { g.head.textContent = epLabel(g.episode) + ' · ' + T('{n} 个版本', { n: g.count }); });
     if (eps.length > 1) showRail(eps);
   }
 
@@ -367,14 +374,14 @@
     return episodesOf(rel).length > 1 ? 'multi' : 'single';
   }
 
-  function epLabel(e) { return e == null ? '集数未知' : '第 ' + (e < 10 ? '0' + e : e) + ' 集'; }
+  function epLabel(e) { return e == null ? T('集数未知') : T('第 {n} 集', { n: e < 10 ? '0' + e : e }); }
 
   function packSelect(groups, value, onChange) {
     var current = PACK_TYPES.filter(function (t) { return t.key === value; })[0];
     var menu = el('div', { class: 'ff-pmenu', role: 'listbox' });
     var wrap = el('div', { class: 'ff-pselect' });
     var btn = el('button', { class: 'ff-pbtn', 'aria-haspopup': 'listbox', onclick: function (e) { e.stopPropagation(); toggle(!wrap.classList.contains('ff-open')); } }, [
-      el('span', { text: current.label }),
+      el('span', { text: T(current.label) }),
       icon('expand_more', 'ff-pcaret'),
     ]);
     PACK_TYPES.forEach(function (t) {
@@ -382,7 +389,7 @@
       var opt = menu.appendChild(el('button', {
         class: 'ff-popt' + (t.key === value ? ' ff-on' : ''), role: 'option',
         onclick: function (e) { e.stopPropagation(); toggle(false); if (t.key !== value) onChange(t.key); },
-      }, [el('span', { text: t.label })]));
+      }, [el('span', { text: T(t.label) })]));
       opt.disabled = !n;
     });
     wrap.appendChild(btn);
@@ -444,26 +451,26 @@
   }
 
   function releaseCard(r, rel, idx) {
-    var btn = el('button', { class: 'ff-btn ff-dl-btn' }, [icon('download'), el('span', { text: '下载' })]);
+    var btn = el('button', { class: 'ff-btn ff-dl-btn' }, [icon('download'), el('span', { text: T('下载') })]);
     if (rel.__sent) markSent(btn);
     btn.addEventListener('click', function () {
       if (rel.__sent) return;
-      btn.disabled = true; btn.lastChild.textContent = '提交中…';
+      btn.disabled = true; btn.lastChild.textContent = T('提交中…');
       api('POST', 'tasks', { query: r.query, releaseId: rel.id }).then(function (res) {
         rel.__sent = true;
         markSent(btn);
-        toast('已交给迅雷', { label: '查看下载任务', run: showTasks });
+        toast(T('已交给迅雷'), { label: T('查看下载任务'), run: showTasks });
         api('GET', 'tasks').then(function (tasks) { if (drawer) { drawer.cache.tasks = tasks; refreshTaskCount(); } }).catch(function () {});
       }).catch(function (e) {
-        btn.disabled = false; btn.lastChild.textContent = '下载';
+        btn.disabled = false; btn.lastChild.textContent = T('下载');
         toast(e.message, null, true);
       });
     });
     return el('div', { class: 'ff-rcard', style: 'animation-delay:' + Math.min(idx, 10) * 30 + 'ms' }, [
       el('div', { class: 'ff-rmain' }, [
-        el('div', { class: 'ff-rname', text: rel.displayName }),
+        el('div', { class: 'ff-rname', text: T.release(rel.displayName) }),
         el('div', { class: 'ff-meta' }, chips(rel.traits, rel.preferred).concat([
-          rel.fileCount > 1 ? el('span', { class: 'ff-dim', text: rel.fileCount + ' 个文件' }) : null,
+          rel.fileCount > 1 ? el('span', { class: 'ff-dim', text: T('{n} 个文件', { n: rel.fileCount }) }) : null,
           el('span', { class: 'ff-dim', text: gb(rel.sizeBytes) }),
           el('span', { class: 'ff-dim', text: date(rel.createdAt) }),
         ])),
@@ -476,7 +483,7 @@
     btn.disabled = true;
     btn.classList.add('ff-sent');
     btn.firstChild.textContent = 'check';
-    btn.lastChild.textContent = '已交给迅雷';
+    btn.lastChild.textContent = T('已交给迅雷');
   }
 
   // ---------- 下载任务 ----------
@@ -485,7 +492,7 @@
 
   function showTasks() {
     openDrawer();
-    var content = switchView('tasks', '下载任务', drawer.search ? drawer.search.label : 'FireFly');
+    var content = switchView('tasks', T('下载任务'), drawer.search ? drawer.search.label : 'FireFly');
     var list = el('div', { class: 'ff-tlist' });
     content.appendChild(list);
     var cards = {};
@@ -502,7 +509,7 @@
 
     // 按任务 ID 原地更新卡片：进度条平滑前进，不整块重绘、不闪烁
     function render(tasks) {
-      if (!tasks.length) { cards = {}; emptyState(list, 'cloud_download', '还没有下载任务', el('div', { class: 'ff-dim ff-small', text: '在详情页点"下载"选一个版本，就会出现在这里' })); return; }
+      if (!tasks.length) { cards = {}; emptyState(list, 'cloud_download', T('还没有下载任务'), el('div', { class: 'ff-dim ff-small', text: T('在详情页点"下载"选一个版本，就会出现在这里') })); return; }
       if (list.querySelector('.ff-empty, .ff-skel, .ff-msg')) list.innerHTML = '';
       var seen = {};
       tasks.forEach(function (t, idx) {
@@ -524,14 +531,14 @@
       c.stats = el('span', { class: 'ff-dim' });
       c.speed = el('span', { class: 'ff-speed' });
       c.msg = el('div', { class: 'ff-tmsg' });
-      c.remove = el('button', { class: 'ff-icon-btn ff-tremove', title: '移除任务（不删除已下载的文件）', 'aria-label': '移除', onclick: function () {
+      c.remove = el('button', { class: 'ff-icon-btn ff-tremove', title: T('移除任务（不删除已下载的文件）'), 'aria-label': T('移除'), onclick: function () {
         c.node.classList.add('ff-leave');
         api('POST', 'tasks/' + t.id + '/dismiss').then(load).catch(function (e) { c.node.classList.remove('ff-leave'); toast(e.message, null, true); });
       } }, [icon('close')]);
       c.node = el('div', { class: 'ff-tcard' }, [
         el('div', { class: 'ff-thead' }, [
-          el('div', { class: 'ff-tname', text: q.title + (q.year ? ' (' + q.year + ')' : ''), title: t.displayName || '' }),
-          q.season ? el('span', { class: 'ff-chip', text: '第 ' + q.season + ' 季' }) : null,
+          el('div', { class: 'ff-tname', text: q.title + (q.year ? ' (' + q.year + ')' : ''), title: T.release(t.displayName) || '' }),
+          q.season ? el('span', { class: 'ff-chip', text: T('第 {n} 季', { n: q.season }) }) : null,
           c.remove,
         ]),
         el('div', { class: 'ff-trow' }, [c.badge, c.stats, c.speed]),
@@ -546,11 +553,11 @@
       c.node.className = 'ff-tcard ff-' + t.state.toLowerCase();
       c.badge.innerHTML = '';
       c.badge.appendChild(icon(stateIcon[t.state] || 'info'));
-      c.badge.appendChild(document.createTextNode(stateText[t.state] || t.state));
+      c.badge.appendChild(document.createTextNode(stateText[t.state] ? T(stateText[t.state]) : t.state));
       c.stats.textContent = t.state === 'Done' ? gb(t.bytesTotal) : gb(t.bytesDone) + ' / ' + gb(t.bytesTotal) + ' · ' + pct + '%';
       c.speed.textContent = t.state === 'Downloading' ? speed(t.speedBps) : '';
       c.bar.style.width = pct + '%';
-      c.msg.textContent = t.message || '';
+      c.msg.textContent = T.server(t.message) || '';
       c.msg.style.display = t.message ? '' : 'none';
       c.remove.style.visibility = t.state === 'Archiving' ? 'hidden' : '';
     }
@@ -575,20 +582,20 @@
 
   function openHot() {
     if (page) return;
-    var back = el('button', { class: 'ff-btn ff-ghost ff-back', text: '← 返回榜单', onclick: showList });
+    var back = el('button', { class: 'ff-btn ff-ghost ff-back', text: T('← 返回榜单'), onclick: showList });
     var list = el('div', { class: 'ff-view' });
     var detail = el('div', { class: 'ff-view', style: 'display:none' });
-    var input = el('input', { class: 'ff-search-input', type: 'search', placeholder: '全局搜索电影、剧集', 'aria-label': '全局搜索电影、剧集', autocomplete: 'off' });
-    var clear = el('button', { class: 'ff-search-clear', title: '清除', 'aria-label': '清除搜索', onclick: function () { input.value = ''; endSearch(); input.focus(); } }, [icon('close')]);
+    var input = el('input', { class: 'ff-search-input', type: 'search', placeholder: T('全局搜索电影、剧集'), 'aria-label': T('全局搜索电影、剧集'), autocomplete: 'off' });
+    var clear = el('button', { class: 'ff-search-clear', title: T('清除'), 'aria-label': T('清除搜索'), onclick: function () { input.value = ''; endSearch(); input.focus(); } }, [icon('close')]);
     var searchBox = el('div', { class: 'ff-search' }, [icon('search', 'ff-search-icon'), input, clear]);
     var root = el('div', { class: 'ff-page' }, [
       el('div', { class: 'ff-page-head' }, [
         back,
-        el('span', { class: 'ff-title', text: '萤火虫 · 热门榜单' }),
+        el('span', { class: 'ff-title', text: T('萤火虫 · 热门榜单') }),
         searchBox,
-        el('button', { class: 'ff-btn ff-ghost', text: '我的收藏', onclick: showFavorites }),
-        el('button', { class: 'ff-btn ff-ghost', text: '下载任务', onclick: showTasks }),
-        el('button', { class: 'ff-btn ff-ghost', text: '✕', title: '关闭（Esc）', onclick: closePage }),
+        el('button', { class: 'ff-btn ff-ghost', text: T('我的收藏'), onclick: showFavorites }),
+        el('button', { class: 'ff-btn ff-ghost', text: T('下载任务'), onclick: showTasks }),
+        el('button', { class: 'ff-btn ff-ghost', text: '✕', title: T('关闭（Esc）'), onclick: closePage }),
       ]),
       el('div', { class: 'ff-page-body' }, [list, detail]),
     ]);
@@ -626,7 +633,7 @@
     v.search.style.display = '';
     v.sgrid.innerHTML = '';
     v.shead.innerHTML = '';
-    v.shead.appendChild(el('span', { text: '正在搜索“' + q + '”…' }));
+    v.shead.appendChild(el('span', { text: T('正在搜索“{q}”…', { q: q }) }));
     scroller().scrollTop = 0;
     fetchSearch(1, ++srch.seq);
   }
@@ -646,26 +653,26 @@
     var v = hot.view;
     srch.loading = true;
     v.smore.innerHTML = '';
-    v.smore.appendChild(el('div', { class: 'ff-msg', text: '加载中…' }));
+    v.smore.appendChild(el('div', { class: 'ff-msg', text: T('加载中…') }));
     api('GET', 'discover/search?q=' + encodeURIComponent(srch.q) + '&page=' + pageNo).then(function (r) {
       if (seq !== srch.seq) return;
       srch.loading = false;
-      if (!r.configured) { message(v.smore, '请先在 控制台 → 插件 → FireFly 里填写 TMDb API Key'); return; }
+      if (!r.configured) { message(v.smore, T('请先在 控制台 → 插件 → FireFly 里填写 TMDb API Key')); return; }
       srch.page = r.page || pageNo;
       srch.totalPages = r.totalPages || 1;
       srch.pending = (srch.pending || []).concat(r.items);
       var hasMore = srch.page < srch.totalPages;
       if (!toppingUp && needsTopUp(v.sgrid, srch.pending, hasMore)) { srch.loading = true; fetchSearch(srch.page + 1, seq, true); return; }
       v.shead.innerHTML = '';
-      v.shead.appendChild(el('span', { text: '“' + srch.q + '”的搜索结果' }));
+      v.shead.appendChild(el('span', { text: T('“{q}”的搜索结果', { q: srch.q }) }));
       // 全局搜索：在全部电影和剧集里按片名找，不带分类、类型、地区等筛选条件
-      v.shead.appendChild(el('span', { class: 'ff-dim', text: '全部电影和剧集' + (r.totalResults ? ' · 约 ' + r.totalResults + ' 条' : '') + '，不受筛选条件影响' }));
-      v.shead.appendChild(el('button', { class: 'ff-btn ff-ghost', text: '返回榜单', onclick: function () { page.input.value = ''; page.searchBox.classList.remove('ff-has-text'); endSearch(); } }));
+      v.shead.appendChild(el('span', { class: 'ff-dim', text: T('全部电影和剧集') + (r.totalResults ? ' · ' + T('约 {n} 条', { n: r.totalResults }) : '') + ' · ' + T('不受筛选条件影响') }));
+      v.shead.appendChild(el('button', { class: 'ff-btn ff-ghost', text: T('返回榜单'), onclick: function () { page.input.value = ''; page.searchBox.classList.remove('ff-has-text'); endSearch(); } }));
       fullRows(v.sgrid, srch.pending, hasMore).forEach(function (i) { v.sgrid.appendChild(card(i, true)); });
       v.smore.innerHTML = '';
-      if (!v.sgrid.children.length && !srch.pending.length) emptyState(v.smore, 'search_off', '没有找到“' + srch.q + '”，换个片名或用原名试试');
-      else if (srch.page < srch.totalPages) v.smore.appendChild(el('button', { class: 'ff-btn ff-ghost', text: '加载更多', onclick: loadMoreSearch }));
-      else v.smore.appendChild(el('div', { class: 'ff-msg ff-dim', text: '已经到底了' }));
+      if (!v.sgrid.children.length && !srch.pending.length) emptyState(v.smore, 'search_off', T('没有找到“{q}”，换个片名或用原名试试', { q: srch.q }));
+      else if (srch.page < srch.totalPages) v.smore.appendChild(el('button', { class: 'ff-btn ff-ghost', text: T('加载更多'), onclick: loadMoreSearch }));
+      else v.smore.appendChild(el('div', { class: 'ff-msg ff-dim', text: T('已经到底了') }));
     }).catch(function (e) {
       if (seq !== srch.seq) return;
       srch.loading = false;
@@ -720,9 +727,9 @@
   function loadFilters() {
     var box = hot.view.filters;
     box.innerHTML = '';
-    box.appendChild(el('div', { class: 'ff-msg', text: '加载筛选项…' }));
+    box.appendChild(el('div', { class: 'ff-msg', text: T('加载筛选项…') }));
     api('GET', 'discover/filters?category=' + encodeURIComponent(hot.state.category)).then(function (r) {
-      if (!r.configured) { message(box, '请先在 控制台 → 插件 → FireFly 里填写 TMDb API Key'); hot.view.grid.innerHTML = ''; return; }
+      if (!r.configured) { message(box, T('请先在 控制台 → 插件 → FireFly 里填写 TMDb API Key')); hot.view.grid.innerHTML = ''; return; }
       hot.genres = r.genres || {};
       hot.rows = r.rows;
       // 换分类后，当前分类没有的选项（如剧集没有分级、出品列表不同）要清掉
@@ -736,17 +743,23 @@
     }).catch(function (e) { message(box, e.message, 'ff-error'); });
   }
 
+  // 筛选项文字：地区按代码用当前语言显示，其余（分类、出品、分级、排序、"更早"）查词条；TMDb 类型名本身已是当前语言
+  function optionLabel(key, o) {
+    if (key === 'region' && o.value && T.language() !== 'zh-CN') return displayName('region', o.value);
+    return T(o.label);
+  }
+
   function renderFilters() {
     var box = hot.view.filters;
     box.innerHTML = '';
     hot.rows.forEach(function (row) {
       var isCat = row.key === 'category';
       var opts = el('div', { class: 'ff-fopts' });
-      var all = isCat || row.key === 'sort' ? [] : [{ value: '', label: '全部' }];
+      var all = isCat || row.key === 'sort' ? [] : [{ value: '', label: T('全部') }];
       all.concat(row.options).forEach(function (o) {
         var active = (hot.state[row.key] || '') === o.value;
         opts.appendChild(el('button', {
-          class: 'ff-fopt' + (active ? ' ff-on' : ''), text: o.label,
+          class: 'ff-fopt' + (active ? ' ff-on' : ''), text: optionLabel(row.key, o),
           onclick: function () {
             // 再点一次已选中的项：取消选择，回到默认值（推荐回到"最热"，其他回到"全部"）；分类没有"不选"，保持不变
             if (active) {
@@ -763,7 +776,7 @@
           },
         }));
       });
-      box.appendChild(el('div', { class: 'ff-frow' + (isCat ? ' ff-frow-cat' : '') }, [isCat ? null : el('span', { class: 'ff-flabel', text: row.label }), opts]));
+      box.appendChild(el('div', { class: 'ff-frow' + (isCat ? ' ff-frow-cat' : '') }, [isCat ? null : el('span', { class: 'ff-flabel', text: T(row.label) }), opts]));
     });
   }
 
@@ -808,7 +821,7 @@
     var grid = hot.view.grid;
     hot.loading = true;
     more.innerHTML = '';
-    more.appendChild(el('div', { class: 'ff-msg', text: '加载中…' }));
+    more.appendChild(el('div', { class: 'ff-msg', text: T('加载中…') }));
     api('GET', query(pageNo)).then(function (r) {
       if (seq !== hotSeq) return;
       hot.state.page = r.page || pageNo;
@@ -819,9 +832,9 @@
       hot.loading = false;
       fullRows(grid, hot.pending, hasMore).forEach(function (i) { grid.appendChild(card(i)); });
       more.innerHTML = '';
-      if (!grid.children.length && !hot.pending.length) more.appendChild(el('div', { class: 'ff-msg', text: '没有符合条件的影片，换个筛选试试' }));
-      else if (hot.state.page < hot.totalPages) more.appendChild(el('button', { class: 'ff-btn ff-ghost', text: '加载更多', onclick: loadMore }));
-      else more.appendChild(el('div', { class: 'ff-msg ff-dim', text: '已经到底了' }));
+      if (!grid.children.length && !hot.pending.length) more.appendChild(el('div', { class: 'ff-msg', text: T('没有符合条件的影片，换个筛选试试') }));
+      else if (hot.state.page < hot.totalPages) more.appendChild(el('button', { class: 'ff-btn ff-ghost', text: T('加载更多'), onclick: loadMore }));
+      else more.appendChild(el('div', { class: 'ff-msg ff-dim', text: T('已经到底了') }));
     }).catch(function (e) {
       if (seq !== hotSeq) return;
       hot.loading = false;
@@ -839,13 +852,13 @@
 
   function card(i, mixed) {
     // 搜索结果电影、剧集混排：副标题标出类型，不用当前分类的类型表
-    var genres = mixed ? [i.kind === 'Series' ? '剧集' : '电影'] : (i.genreIds || []).map(function (g) { return hot.genres[g]; }).filter(Boolean).slice(0, 2);
+    var genres = mixed ? [i.kind === 'Series' ? T('剧集|单部') : T('电影|单部')] : (i.genreIds || []).map(function (g) { return hot.genres[g]; }).filter(Boolean).slice(0, 2);
     var sub = [i.year, genres.join(' / ')].filter(Boolean).join(' · ');
     return el('div', { class: 'ff-card', onclick: function () { openDetail(i.kind, i.tmdbId); } }, [
       el('div', { class: 'ff-poster' }, [
         i.posterUrl ? el('img', { src: tmdbImg(i.posterUrl), loading: 'lazy', alt: i.title }) : el('div', { class: 'ff-noposter' }),
         ratingBadge(i.rating),
-        i.inLibrary ? el('span', { class: 'ff-chip ff-in', text: '已在库' }) : null,
+        i.inLibrary ? el('span', { class: 'ff-chip ff-in', text: T('已在库') }) : null,
       ]),
       el('div', { class: 'ff-card-title', text: i.title, title: i.originalTitle ? i.title + ' / ' + i.originalTitle : i.title }),
       sub ? el('div', { class: 'ff-card-sub', text: sub }) : null,
@@ -855,89 +868,18 @@
   function showFavorites() {
     if (!page) openHot();
     var body = beginDetail();
-    body.appendChild(el('h2', { class: 'ff-h2', text: '我的收藏' }));
+    body.appendChild(el('h2', { class: 'ff-h2', text: T('我的收藏') }));
     var grid = el('div', { class: 'ff-grid ff-hot-grid' });
     body.appendChild(grid);
     api('GET', 'favorites').then(function (items) {
-      if (!items.length) { grid.appendChild(el('div', { class: 'ff-msg', text: '还没有收藏。在详情页点"收藏"即可加入这里。' })); return; }
+      if (!items.length) { grid.appendChild(el('div', { class: 'ff-msg', text: T('还没有收藏。在详情页点"收藏"即可加入这里。') })); return; }
       items.forEach(function (i) { grid.appendChild(card(i)); });
     }).catch(function (e) { message(body, e.message, 'ff-error'); });
   }
 
   // ---------- 资源详情页 ----------
-  // 右侧信息栏跟随配置页的 TMDb 语言。语言名、地区名用浏览器的 Intl.DisplayNames 按该语言翻译；
-  // 港澳台用简短叫法（Intl 默认是"香港特别行政区"这类全称）；简体中文沿用原来的叫法
-  var REGION_SHORT = {
-    'zh-CN': { CN: '中国大陆', HK: '中国香港', TW: '中国台湾', MO: '中国澳门' },
-    'zh-TW': { HK: '香港', TW: '台灣', MO: '澳門' },
-    en: { HK: 'Hong Kong', TW: 'Taiwan', MO: 'Macau' },
-    ja: { HK: '香港', TW: '台湾', MO: 'マカオ' },
-    ko: { HK: '홍콩', TW: '대만', MO: '마카오' },
-  };
-  var SIDE_TEXT = {
-    'zh-CN': {
-      type: '资源类型', status: '状态', originalTitle: '原始片名', originalLanguage: '原始语言', firstAir: '首播日期', release: '上映日期',
-      countries: '出品地区', seasonsEpisodes: '季 / 集', runtime: '片长', certification: '分级', networks: '播出平台', streaming: '在线播放',
-      rentBuy: '租赁 / 购买', companies: '出品方', budget: '预算', revenue: '票房', homepage: '官方网站', viewOnTmdb: '在 TMDb 查看', noData: '暂无数据',
-      seasons: function (n) { return n + ' 季'; }, episodes: function (n) { return n + ' 集'; }, perEpisode: '每集约 ',
-      hours: function (h, m) { return h + '小时' + (m ? m + '分钟' : ''); }, mins: function (m) { return m + '分钟'; },
-      kinds: { series: '剧集', movie: '电影', anime: '动漫', animatedMovie: '动画电影', documentary: '纪录片', variety: '综艺' },
-      states: { Released: '已上映', 'Post Production': '后期制作', 'In Production': '制作中', Planned: '筹备中', Rumored: '传闻', Canceled: '已取消', 'Returning Series': '更新中', Ended: '已完结', Pilot: '试播' },
-    },
-    'zh-TW': {
-      type: '資源類型', status: '狀態', originalTitle: '原始片名', originalLanguage: '原始語言', firstAir: '首播日期', release: '上映日期',
-      countries: '出品地區', seasonsEpisodes: '季 / 集', runtime: '片長', certification: '分級', networks: '播出平台', streaming: '線上播放',
-      rentBuy: '租借 / 購買', companies: '出品方', budget: '預算', revenue: '票房', homepage: '官方網站', viewOnTmdb: '在 TMDb 查看', noData: '暫無資料',
-      seasons: function (n) { return n + ' 季'; }, episodes: function (n) { return n + ' 集'; }, perEpisode: '每集約 ',
-      hours: function (h, m) { return h + '小時' + (m ? m + '分鐘' : ''); }, mins: function (m) { return m + '分鐘'; },
-      kinds: { series: '劇集', movie: '電影', anime: '動漫', animatedMovie: '動畫電影', documentary: '紀錄片', variety: '綜藝' },
-      states: { Released: '已上映', 'Post Production': '後期製作', 'In Production': '製作中', Planned: '籌備中', Rumored: '傳聞', Canceled: '已取消', 'Returning Series': '更新中', Ended: '已完結', Pilot: '試播' },
-    },
-    en: {
-      type: 'Type', status: 'Status', originalTitle: 'Original Title', originalLanguage: 'Original Language', firstAir: 'First Air Date', release: 'Release Date',
-      countries: 'Country', seasonsEpisodes: 'Seasons / Episodes', runtime: 'Runtime', certification: 'Rating', networks: 'Network', streaming: 'Streaming',
-      rentBuy: 'Rent / Buy', companies: 'Production', budget: 'Budget', revenue: 'Revenue', homepage: 'Homepage', viewOnTmdb: 'View on TMDb', noData: 'No data',
-      seasons: function (n) { return n + (n === 1 ? ' season' : ' seasons'); }, episodes: function (n) { return n + (n === 1 ? ' episode' : ' episodes'); }, perEpisode: '~',
-      hours: function (h, m) { return h + 'h' + (m ? ' ' + m + 'm' : ''); }, mins: function (m) { return m + 'm'; },
-      kinds: { series: 'TV Series', movie: 'Movie', anime: 'Anime', animatedMovie: 'Animated Film', documentary: 'Documentary', variety: 'Reality / Talk Show' },
-      states: { Released: 'Released', 'Post Production': 'Post Production', 'In Production': 'In Production', Planned: 'Planned', Rumored: 'Rumored', Canceled: 'Canceled', 'Returning Series': 'Returning Series', Ended: 'Ended', Pilot: 'Pilot' },
-    },
-    ja: {
-      type: '種類', status: 'ステータス', originalTitle: '原題', originalLanguage: '原語', firstAir: '初回放送日', release: '公開日',
-      countries: '製作国', seasonsEpisodes: 'シーズン / 話数', runtime: '上映時間', certification: 'レーティング', networks: '放送局', streaming: '配信',
-      rentBuy: 'レンタル / 購入', companies: '製作会社', budget: '製作費', revenue: '興行収入', homepage: '公式サイト', viewOnTmdb: 'TMDb で見る', noData: 'データなし',
-      seasons: function (n) { return n + ' シーズン'; }, episodes: function (n) { return n + ' 話'; }, perEpisode: '1話 約',
-      hours: function (h, m) { return h + '時間' + (m ? m + '分' : ''); }, mins: function (m) { return m + '分'; },
-      kinds: { series: 'ドラマ', movie: '映画', anime: 'アニメ', animatedMovie: 'アニメ映画', documentary: 'ドキュメンタリー', variety: 'バラエティ' },
-      states: { Released: '公開済み', 'Post Production': 'ポストプロダクション', 'In Production': '製作中', Planned: '企画中', Rumored: '噂', Canceled: '中止', 'Returning Series': '放送中', Ended: '完結', Pilot: 'パイロット' },
-    },
-    ko: {
-      type: '유형', status: '상태', originalTitle: '원제', originalLanguage: '원어', firstAir: '첫 방송일', release: '개봉일',
-      countries: '제작 국가', seasonsEpisodes: '시즌 / 에피소드', runtime: '러닝타임', certification: '등급', networks: '방송사', streaming: '스트리밍',
-      rentBuy: '대여 / 구매', companies: '제작사', budget: '제작비', revenue: '수익', homepage: '공식 사이트', viewOnTmdb: 'TMDb에서 보기', noData: '데이터 없음',
-      seasons: function (n) { return '시즌 ' + n + '개'; }, episodes: function (n) { return n + '화'; }, perEpisode: '회당 약 ',
-      hours: function (h, m) { return h + '시간' + (m ? ' ' + m + '분' : ''); }, mins: function (m) { return m + '분'; },
-      kinds: { series: 'TV 시리즈', movie: '영화', anime: '애니메이션', animatedMovie: '애니메이션 영화', documentary: '다큐멘터리', variety: '예능' },
-      states: { Released: '개봉', 'Post Production': '후반 작업', 'In Production': '제작 중', Planned: '기획 중', Rumored: '루머', Canceled: '취소', 'Returning Series': '방영 중', Ended: '종영', Pilot: '파일럿' },
-    },
-  };
-  function sideText(lang) {
-    lang = lang || 'zh-CN';
-    if (lang === 'zh-HK') lang = 'zh-TW';
-    return SIDE_TEXT[lang] || SIDE_TEXT[lang.split('-')[0]] || SIDE_TEXT['zh-CN'];
-  }
-  function displayName(type, code, lang) {
-    if (!code) return code;
-    lang = lang || 'zh-CN';
-    var short = REGION_SHORT[lang === 'zh-HK' ? 'zh-TW' : lang] || REGION_SHORT[lang.split('-')[0]];
-    if (type === 'region' && short && short[code]) return short[code];
-    try {
-      // TMDb 用 cn 表示粤语
-      return new Intl.DisplayNames([lang], { type: type, fallback: 'code' }).of(type === 'language' && code === 'cn' ? 'yue' : code) || code;
-    } catch (e) {
-      return code;
-    }
-  }
+  var sideText = function (lang) { return window.FireFlyI18n.sideText(lang); };
+  var displayName = function (type, code, lang) { return window.FireFlyI18n.displayName(type, code, lang); };
 
   function beginDetail() {
     if (page.list.style.display !== 'none') page.scroll = scroller().scrollTop;
@@ -953,7 +895,7 @@
     if (!page) openHot();
     var body = beginDetail();
     var seg = kind === 'Series' ? 'tv' : 'movie';
-    body.appendChild(el('div', { class: 'ff-msg', text: '加载详情…' }));
+    body.appendChild(el('div', { class: 'ff-msg', text: T('加载详情…') }));
     api('GET', 'detail/' + seg + '/' + encodeURIComponent(tmdbId)).then(function (r) {
       if (page.detail !== body || body.style.display === 'none') return;
       body.innerHTML = '';
@@ -980,7 +922,7 @@
     var label = d.title + (d.year ? ' (' + d.year + ')' : '');
     var favBtn = el('button', { class: 'ff-btn ff-ghost ff-fav' });
     var favorite = !!meta.favorite;
-    function paintFav() { favBtn.textContent = favorite ? '♥ 已收藏' : '♡ 收藏'; favBtn.classList.toggle('ff-fav-on', favorite); }
+    function paintFav() { favBtn.textContent = favorite ? T('♥ 已收藏') : T('♡ 收藏'); favBtn.classList.toggle('ff-fav-on', favorite); }
     paintFav();
     favBtn.addEventListener('click', function () {
       favBtn.disabled = true;
@@ -991,11 +933,11 @@
         .catch(function (e) { toast(e.message, null, true); })
         .then(function () { favBtn.disabled = false; });
     });
-    var download = el('button', { class: 'ff-btn', text: '⬇ 下载', onclick: function () {
+    var download = el('button', { class: 'ff-btn', text: T('⬇ 下载'), onclick: function () {
       openSearch({ title: d.title, originalTitle: d.originalTitle, year: d.year, kind: d.kind, tmdbId: d.tmdbId }, d.title);
     } });
     var trailers = meta.showTrailers ? d.videos : [];
-    var trailerBtn = trailers.length ? el('button', { class: 'ff-btn ff-ghost', text: '▶ 播放预告片', onclick: function () {
+    var trailerBtn = trailers.length ? el('button', { class: 'ff-btn ff-ghost', text: T('▶ 播放预告片'), onclick: function () {
       var t = body.querySelector('.ff-trailer');
       if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); play(trailers[0]); }
     } }) : null;
@@ -1011,13 +953,13 @@
           d.originalTitle ? el('div', { class: 'ff-dim', text: d.originalTitle }) : null,
           el('div', { class: 'ff-facts' }, facts),
           el('div', { class: 'ff-actions' }, [
-            scoreRing(d.rating), el('span', { class: 'ff-score-label', text: '用户评分' + (d.voteCount ? '（' + d.voteCount + '人）' : '') }),
+            scoreRing(d.rating), el('span', { class: 'ff-score-label', text: d.voteCount ? T('用户评分（{n}人）', { n: d.voteCount }) : T('用户评分') }),
             favBtn, download, trailerBtn,
-            meta.inLibrary ? el('span', { class: 'ff-chip ff-in-static', text: '已在库' }) : null,
+            meta.inLibrary ? el('span', { class: 'ff-chip ff-in-static', text: T('已在库') }) : null,
           ]),
           d.tagline ? el('div', { class: 'ff-tagline', text: d.tagline }) : null,
           d.directors.length ? el('div', { class: 'ff-crew' }, d.directors.map(function (p) {
-            return el('div', { class: 'ff-crew-item' }, [el('div', { class: 'ff-crew-name', text: p.name }), el('div', { class: 'ff-dim', text: p.role })]);
+            return el('div', { class: 'ff-crew-item' }, [el('div', { class: 'ff-crew-name', text: p.name }), el('div', { class: 'ff-dim', text: T.server(p.role) })]);
           })) : null,
         ]),
       ]),
@@ -1028,7 +970,7 @@
     body.appendChild(el('div', { class: 'ff-cols' }, [main, side]));
 
     // 1. 剧情介绍
-    main.appendChild(section('剧情介绍', el('p', { class: 'ff-overview', text: d.overview || '暂无中文简介。' })));
+    main.appendChild(section(T('剧情介绍'), el('p', { class: 'ff-overview', text: d.overview || T('暂无中文简介。') })));
 
     // 2. 预告片（YouTube；配置页可关闭，大陆网络不翻墙时打不开）
     var player = el('div', { class: 'ff-trailer' });
@@ -1049,10 +991,10 @@
       var picks = el('div', { class: 'ff-vids' }, trailers.map(function (v) {
         return el('button', { class: 'ff-fopt ff-vid', 'data-key': v.key, text: v.name || v.type, onclick: function () { play(v); } });
       }));
-      main.appendChild(section('预告片', player, picks,
-        el('a', { class: 'ff-dim ff-small', href: 'https://www.youtube.com/watch?v=' + encodeURIComponent(first.key), target: '_blank', rel: 'noopener', text: '播放不了？在 YouTube 打开' })));
+      main.appendChild(section(T('预告片'), player, picks,
+        el('a', { class: 'ff-dim ff-small', href: 'https://www.youtube.com/watch?v=' + encodeURIComponent(first.key), target: '_blank', rel: 'noopener', text: T('播放不了？在 YouTube 打开') })));
     } else if (meta.showTrailers) {
-      main.appendChild(section('预告片', el('div', { class: 'ff-msg ff-dim', text: 'TMDb 暂无预告片' })));
+      main.appendChild(section(T('预告片'), el('div', { class: 'ff-msg ff-dim', text: T('TMDb 暂无预告片') })));
     }
 
     // 3. 导演 & 演员
@@ -1062,11 +1004,11 @@
       people.appendChild(el('div', { class: 'ff-person' }, [
         p.profileUrl ? el('img', { src: tmdbImg(p.profileUrl), loading: 'lazy', alt: p.name }) : el('div', { class: 'ff-noface', text: (p.name || '?').slice(0, 1) }),
         el('div', { class: 'ff-person-name', text: p.name }),
-        el('div', { class: 'ff-dim ff-small', text: isCrew ? p.role : (p.role || '') }),
-        p.episodes ? el('div', { class: 'ff-dim ff-small', text: p.episodes + ' 集' }) : null,
+        el('div', { class: 'ff-dim ff-small', text: isCrew ? T.server(p.role) : (p.role || '') }),
+        p.episodes ? el('div', { class: 'ff-dim ff-small', text: T('{n} 集', { n: p.episodes }) }) : null,
       ]));
     });
-    main.appendChild(section('导演 & 演员', people.children.length ? people : el('div', { class: 'ff-msg ff-dim', text: '暂无演职员信息' })));
+    main.appendChild(section(T('导演 & 演员'), people.children.length ? people : el('div', { class: 'ff-msg ff-dim', text: T('暂无演职员信息') })));
 
     // 4. 分季：默认只显示当前季，"查看全部季"在下方展开其余各季
     if (isTv && d.seasons.length) main.appendChild(seasonSection(d));
@@ -1086,7 +1028,7 @@
     put(side, fact(t.runtime, runtime && (isTv ? t.perEpisode : '') + runtime));
     put(side, fact(t.certification, d.certification));
     if (isTv) put(side, logos(t.networks, d.networks));
-    put(side, logos(p ? t.streaming + '（' + displayName('region', p.region, lang) + '）' : t.streaming, p ? p.stream : [], p && p.link, t.noData));
+    put(side, logos(p ? t.streaming + t.paren(displayName('region', p.region, lang)) : t.streaming, p ? p.stream : [], p && p.link, t.noData));
     if (p && (p.rent.length || p.buy.length)) put(side, logos(t.rentBuy, p.rent.concat(p.buy).filter(function (x, i, a) { return a.findIndex(function (y) { return y.name === x.name; }) === i; }), p.link));
     put(side, logos(t.companies, d.companies));
     if (!isTv) { put(side, fact(t.budget, money(d.budget))); put(side, fact(t.revenue, money(d.revenue))); }
@@ -1111,40 +1053,47 @@
     var others = d.seasons.filter(function (s) { return s !== current; }).sort(function (a, b) { return b.number - a.number; });
     var list = el('div', { class: 'ff-season-list' }, [seasonCard(d, current)]);
     var rest = null;
-    var toggle = others.length ? el('button', { class: 'ff-link-btn', text: '查看全部季（共 ' + d.seasons.length + ' 季）', onclick: function () {
+    var toggle = others.length ? el('button', { class: 'ff-link-btn', text: T('查看全部季（共 {n} 季）', { n: d.seasons.length }), onclick: function () {
       if (!rest) {
         rest = el('div', { class: 'ff-season-list' }, others.map(function (s) { return seasonCard(d, s); }));
         list.parentNode.insertBefore(rest, toggle);
       } else {
         rest.style.display = rest.style.display === 'none' ? '' : 'none';
       }
-      toggle.textContent = rest.style.display === 'none' ? '查看全部季（共 ' + d.seasons.length + ' 季）' : '收起其他季';
+      toggle.textContent = rest.style.display === 'none' ? T('查看全部季（共 {n} 季）', { n: d.seasons.length }) : T('收起其他季');
     } }) : null;
-    return section(current.number === latest ? '最新一季' : '当前季', list, toggle);
+    return section(current.number === latest ? T('最新一季') : T('当前季'), list, toggle);
   }
 
+  // 日期：简体中文保持"2026 年 08 月 16 日"，其他语言用浏览器按该语言格式化
   function cnDate(s) {
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '');
-    return m ? m[1] + ' 年 ' + m[2] + ' 月 ' + m[3] + ' 日' : '';
+    if (!m) return '';
+    if (T.language() === 'zh-CN') return m[1] + ' 年 ' + m[2] + ' 月 ' + m[3] + ' 日';
+    try {
+      return new Intl.DateTimeFormat(T.language(), { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])));
+    } catch (e) {
+      return m[0];
+    }
   }
 
   function seasonCard(d, s) {
-    var foot = el('div', { class: 'ff-season-foot' }, [el('span', { class: 'ff-dim', text: s.airDate ? '首播 ' + cnDate(s.airDate) : '' })]);
+    var foot = el('div', { class: 'ff-season-foot' }, [el('span', { class: 'ff-dim', text: s.airDate ? T('首播 {date}', { date: cnDate(s.airDate) }) : '' })]);
     api('GET', 'detail/tv/' + d.tmdbId + '/season/' + s.number).then(function (r) {
       var e = r.episode;
       if (!e) return;
       foot.innerHTML = '';
       foot.appendChild(el('span', { class: 'material-icons ff-cal', text: 'event', 'aria-hidden': 'true' }));
-      foot.appendChild(el('span', { class: 'ff-ep-name', text: e.name || ('第 ' + e.episode + ' 集') }));
-      foot.appendChild(el('span', { text: '(' + e.season + 'x' + e.episode + (e.airDate ? ', ' + cnDate(e.airDate) : '') + ')' + (e.aired ? '' : ' 即将开播') }));
+      foot.appendChild(el('span', { class: 'ff-ep-name', text: e.name || T('第 {n} 集', { n: e.episode }) }));
+      foot.appendChild(el('span', { text: '(' + e.season + 'x' + e.episode + (e.airDate ? ', ' + cnDate(e.airDate) : '') + ')' + (e.aired ? '' : ' ' + T('即将开播')) }));
     }).catch(function () {});
     return el('div', { class: 'ff-season-card' }, [
       el('div', { class: 'ff-season-poster' }, [s.posterUrl ? el('img', { src: tmdbImg(s.posterUrl), loading: 'lazy', alt: s.name }) : el('div', { class: 'ff-noposter' })]),
       el('div', { class: 'ff-season-body' }, [
-        el('h3', { class: 'ff-season-title', text: s.name || ('第 ' + s.number + ' 季') }),
+        el('h3', { class: 'ff-season-title', text: s.name || T('第 {n} 季', { n: s.number }) }),
         el('div', { class: 'ff-season-meta' }, [
           s.rating ? el('span', { class: 'ff-badge', text: '★ ' + Math.round(s.rating * 10) + '%' }) : null,
-          el('span', { text: [s.year, s.episodeCount ? '共 ' + s.episodeCount + ' 集' : null].filter(Boolean).join(' • ') }),
+          el('span', { text: [s.year, s.episodeCount ? T('共 {n} 集', { n: s.episodeCount }) : null].filter(Boolean).join(' • ') }),
         ]),
         s.overview ? el('p', { class: 'ff-season-overview', text: s.overview }) : null,
         foot,
@@ -1190,7 +1139,7 @@
       if (!kind || host.querySelector('.ff-detail-btn')) return;
       var season = item.Type === 'Season' ? item.IndexNumber : item.Type === 'Episode' ? item.ParentIndexNumber : undefined;
       host.appendChild(el('button', {
-        is: 'emby-button', class: 'button-flat detailButton ff-detail-btn', 'data-id': id, title: '获取资源',
+        is: 'emby-button', class: 'button-flat detailButton ff-detail-btn', 'data-id': id, title: T('获取资源'),
         onclick: function () { openSearch({ itemId: id, kind: kind, season: season }, item.SeriesName || item.Name); },
       }, [el('div', { class: 'detailButton-content' }, [el('span', { class: 'material-icons detailButton-icon', text: 'cloud_download', 'aria-hidden': 'true' })])]));
     }, function () { pendingId = null; });
@@ -1200,7 +1149,7 @@
     var right = document.querySelector('.headerRight');
     if (!right || right.querySelector('.ff-header-btn')) return;
     right.insertBefore(el('button', {
-      is: 'paper-icon-button-light', class: 'headerButton ff-header-btn', title: 'FireFly 热门榜单', onclick: openHot,
+      is: 'paper-icon-button-light', class: 'headerButton ff-header-btn', title: T('FireFly 热门榜单'), onclick: openHot,
     }, [el('span', { class: 'material-icons', text: 'local_fire_department', 'aria-hidden': 'true' })]), right.firstChild);
   }
 
@@ -1216,9 +1165,12 @@
     client.getCurrentUser().then(function (user) {
       isAdmin = !!(user && user.Policy && user.Policy.IsAdministrator);
       if (!isAdmin) return;
-      new MutationObserver(function () { tick(); }).observe(document.body, { childList: true, subtree: true });
-      window.addEventListener('hashchange', tick);
-      tick();
+      // 先取 TMDb 语言再注入按钮，按钮提示也用这个语言；取不到就用简体中文
+      return api('GET', 'ui').then(function (r) { if (I18N && r && r.language) I18N.setLanguage(r.language); }, function () {}).then(function () {
+        new MutationObserver(function () { tick(); }).observe(document.body, { childList: true, subtree: true });
+        window.addEventListener('hashchange', tick);
+        tick();
+      });
     });
   }
 

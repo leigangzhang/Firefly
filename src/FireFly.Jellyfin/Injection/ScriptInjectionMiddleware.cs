@@ -11,7 +11,7 @@ public sealed class ScriptInjectionMiddleware
 {
     private const string Marker = "FireFly/web/firefly.js";
     private static readonly string Payload =
-        $"<link rel=\"stylesheet\" href=\"/FireFly/web/firefly.css?v={Version}\"><script defer src=\"/{Marker}?v={Version}\"></script>";
+        $"<link rel=\"stylesheet\" href=\"/FireFly/web/firefly.css?v={Version}\"><script defer src=\"/FireFly/web/firefly-i18n.js?v={Version}\"></script><script defer src=\"/{Marker}?v={Version}\"></script>";
 
     private readonly RequestDelegate _next;
 
