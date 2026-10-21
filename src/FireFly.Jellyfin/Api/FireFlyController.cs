@@ -314,20 +314,61 @@ public sealed class FireFlyController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// 收藏列表。收藏时存的片名和海报是当时的 TMDb 语言；列表按当前语言重新取（TMDb 有缓存），
+    /// 取不到时用收藏时存的。
+    /// </summary>
     [HttpGet("favorites")]
     [Authorize(Policy = Elevated)]
-    public IActionResult FavoriteList() => ApiJson(_runtime.Favorites.List().Select(f => new
+    public async Task<IActionResult> FavoriteList(CancellationToken ct)
     {
-        f.TmdbId,
-        kind = f.Kind,
-        f.Title,
-        f.OriginalTitle,
-        f.Year,
-        f.PosterUrl,
-        f.Rating,
-        f.AddedAt,
-        inLibrary = InLibrary(f.Kind, f.TmdbId, f.Title, f.Year),
-    }));
+        var favorites = _runtime.Favorites.List();
+        // 首次切换语言时缓存是空的，同时向 TMDb 发的请求限制在几个以内
+        using var gate = new SemaphoreSlim(FavoriteLookupConcurrency);
+        var current = await Task.WhenAll(favorites.Select(async f =>
+        {
+            await gate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                return await CurrentLanguageAsync(f, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        })).ConfigureAwait(false);
+        return ApiJson(favorites.Select((f, i) => new
+        {
+            f.TmdbId,
+            kind = f.Kind,
+            title = current[i]?.Title ?? f.Title,
+            originalTitle = current[i]?.OriginalTitle ?? f.OriginalTitle,
+            f.Year,
+            posterUrl = current[i]?.PosterUrl ?? f.PosterUrl,
+            rating = current[i]?.Rating ?? f.Rating,
+            f.AddedAt,
+            inLibrary = InLibrary(f.Kind, f.TmdbId, f.Title, f.Year),
+        }));
+    }
+
+    private const int FavoriteLookupConcurrency = 6;
+
+    private async Task<TmdbItem?> CurrentLanguageAsync(FavoriteItem favorite, CancellationToken ct)
+    {
+        if (!_runtime.Tmdb.Configured)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await _runtime.Tmdb.DetailAsync(favorite.Kind, favorite.TmdbId, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException && !ct.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
 
     [HttpPost("favorites")]
     [Authorize(Policy = Elevated)]
@@ -472,7 +513,7 @@ public sealed class FireFlyController : ControllerBase
                 SeasonEpisodes = query.Kind == MediaKind.Series && names.SeasonEpisodes?.TryGetValue(query.Season ?? 1, out var count) == true ? count : null,
             };
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
             return query;
         }

@@ -13,20 +13,63 @@
 
   var page = null;
   var DEFAULT_SORT = 'hot';
+  // 当前所在的视图：list（榜单/搜索）、favorites（收藏）、detail（详情，from 记来处，返回时回到那里）
+  var route = { view: 'list' };
+  var favScroll = 0;
+  // 浏览器刷新后回到刷新前的 FireFly 页面；只存在本标签页里
+  var SAVED_KEY = 'firefly.page';
   var hot = { state: { category: 'movie', sort: DEFAULT_SORT, page: 1 }, genres: {}, totalPages: 1, loading: false, view: null, rows: null };
 
   function closePage() {
     srch.q = '';
     if (page) { page.root.remove(); page = null; document.removeEventListener('keydown', onPageKey); }
+    route = { view: 'list' };
+    try { sessionStorage.removeItem(SAVED_KEY); } catch (e) { /* 存不了就不恢复 */ }
   }
   function onPageKey(e) {
     if (e.key !== 'Escape' || F.drawerOpen()) return;
-    if (page && page.detail.style.display !== 'none') showList(); else closePage();
+    if (page && page.detail.style.display !== 'none') goBack(); else closePage();
+  }
+
+  function save() {
+    if (!page) return;
+    try { sessionStorage.setItem(SAVED_KEY, JSON.stringify({ route: route, state: hot.state, q: srch.q })); } catch (e) { /* 存不了就不恢复 */ }
+  }
+
+  function goBack() {
+    if (route.view === 'detail' && route.from === 'favorites') showFavorites(favScroll); else showList();
+  }
+
+  // 刷新当前视图，不用浏览器刷新（那会回到 Jellyfin 首页）
+  function refresh() {
+    if (route.view === 'favorites') showFavorites();
+    else if (route.view === 'detail') openDetail(route.kind, route.tmdbId, route.from);
+    else if (srch.q) { var q = srch.q; srch.q = ''; srch.seq++; startSearch(q); }
+    else loadFilters();
+  }
+
+  // 顶栏按钮进入：先取一次当前的 TMDb 语言，配置页改了语言不用刷新浏览器
+  function enter() {
+    if (page) return;
+    api('GET', 'ui').then(function (r) { if (r && r.language && window.FireFlyI18n) window.FireFlyI18n.setLanguage(r.language); }, function () {}).then(function () { openHot(); });
+  }
+
+  // 浏览器刷新后：上次没关 FireFly 页面就重新打开，回到原来的筛选、搜索和视图
+  function restore() {
+    var saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(SAVED_KEY) || 'null'); } catch (e) { saved = null; }
+    if (!saved || page) return;
+    if (saved.state && saved.state.category) hot.state = Object.assign({}, saved.state, { page: 1 });
+    openHot();
+    if (saved.q) { page.input.value = saved.q; page.searchBox.classList.add('ff-has-text'); startSearch(saved.q); }
+    var r = saved.route || {};
+    if (r.view === 'favorites') showFavorites();
+    else if (r.view === 'detail' && r.tmdbId) openDetail(r.kind, r.tmdbId, r.from);
   }
 
   function openHot() {
     if (page) return;
-    var back = el('button', { class: 'ff-btn ff-ghost ff-back', text: T('← 返回榜单'), onclick: showList });
+    var back = el('button', { class: 'ff-btn ff-ghost ff-back', text: T('← 返回榜单'), onclick: goBack });
     var list = el('div', { class: 'ff-view' });
     var detail = el('div', { class: 'ff-view', style: 'display:none' });
     var input = el('input', { class: 'ff-search-input', type: 'search', placeholder: T('全局搜索电影、剧集'), 'aria-label': T('全局搜索电影、剧集'), autocomplete: 'off' });
@@ -37,7 +80,8 @@
         back,
         el('span', { class: 'ff-title', text: T('萤火虫 · 热门榜单') }),
         searchBox,
-        el('button', { class: 'ff-btn ff-ghost', text: T('我的收藏'), onclick: showFavorites }),
+        el('button', { class: 'ff-btn ff-ghost ff-icon-only', title: T('刷新'), 'aria-label': T('刷新'), onclick: refresh }, [icon('refresh')]),
+        el('button', { class: 'ff-btn ff-ghost', text: T('我的收藏'), onclick: function () { showFavorites(); } }),
         el('button', { class: 'ff-btn ff-ghost', text: T('下载任务'), onclick: showTasks }),
         el('button', { class: 'ff-btn ff-ghost', text: '✕', title: T('关闭（Esc）'), onclick: closePage }),
       ]),
@@ -47,7 +91,9 @@
     document.addEventListener('keydown', onPageKey);
     page = { root: root, list: list, detail: detail, back: back, scroll: 0, input: input, searchBox: searchBox };
     back.style.display = 'none';
+    route = { view: 'list' };
     buildList();
+    save();
     var timer = null;
     input.addEventListener('input', function () {
       searchBox.classList.toggle('ff-has-text', !!input.value);
@@ -80,6 +126,7 @@
     v.shead.appendChild(el('span', { text: T('正在搜索“{q}”…', { q: q }) }));
     scroller().scrollTop = 0;
     fetchSearch(1, ++srch.seq);
+    save();
   }
 
   function endSearch() {
@@ -91,6 +138,7 @@
     v.filters.style.display = v.grid.style.display = v.more.style.display = '';
     if (page.detail.style.display !== 'none') showList();
     scroller().scrollTop = srch.listScroll;
+    save();
   }
 
   function fetchSearch(pageNo, seq, toppingUp) {
@@ -138,6 +186,8 @@
     page.list.style.display = '';
     page.back.style.display = 'none';
     scroller().scrollTop = page.scroll;
+    route = { view: 'list' };
+    save();
   }
 
   function buildList() {
@@ -254,6 +304,7 @@
     hot.pending = [];
     hot.view.grid.innerHTML = '';
     fetchPage(1, ++hotSeq);
+    save();
   }
   function loadMore() {
     if (hot.loading || hot.state.page >= hot.totalPages) return;
@@ -309,15 +360,21 @@
     ]);
   }
 
-  function showFavorites() {
+  // scrollTo：从详情页返回时回到原来的滚动位置
+  function showFavorites(scrollTo) {
     if (!page) openHot();
     var body = beginDetail();
+    route = { view: 'favorites' };
+    page.back.textContent = T('← 返回榜单');
+    save();
     body.appendChild(el('h2', { class: 'ff-h2', text: T('我的收藏') }));
     var grid = el('div', { class: 'ff-grid ff-hot-grid' });
     body.appendChild(grid);
     api('GET', 'favorites').then(function (items) {
+      if (page.detail !== body || route.view !== 'favorites') return;
       if (!items.length) { grid.appendChild(el('div', { class: 'ff-msg', text: T('还没有收藏。在详情页点"收藏"即可加入这里。') })); return; }
       items.forEach(function (i) { grid.appendChild(card(i)); });
+      if (scrollTo) scroller().scrollTop = scrollTo;
     }).catch(function (e) { message(body, e.message, 'ff-error'); });
   }
 
@@ -335,9 +392,15 @@
     return page.detail;
   }
 
-  function openDetail(kind, tmdbId) {
+  // from：返回时回到哪里（favorites 或 list）；不传时按当前视图推断
+  function openDetail(kind, tmdbId, from) {
     if (!page) openHot();
+    if (!from) from = route.view === 'favorites' ? 'favorites' : route.view === 'detail' ? route.from : 'list';
+    if (route.view === 'favorites') favScroll = scroller().scrollTop;
     var body = beginDetail();
+    route = { view: 'detail', kind: kind, tmdbId: tmdbId, from: from };
+    page.back.textContent = from === 'favorites' ? T('← 返回收藏') : T('← 返回榜单');
+    save();
     var seg = kind === 'Series' ? 'tv' : 'movie';
     body.appendChild(el('div', { class: 'ff-msg', text: T('加载详情…') }));
     api('GET', 'detail/' + seg + '/' + encodeURIComponent(tmdbId)).then(function (r) {
@@ -348,6 +411,8 @@
   }
 
   F.displayName = displayName;
+  F.enter = enter;
   F.openHot = openHot;
+  F.restore = restore;
   F.sideText = sideText;
 })();

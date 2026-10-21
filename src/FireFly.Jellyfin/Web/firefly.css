@@ -133,6 +133,7 @@
 .ff-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;transition:background .15s,color .15s,opacity .15s,transform .1s}
 .ff-btn:active:not(:disabled){transform:scale(.97)}
 .ff-btn .material-icons{font-size:18px}
+.ff-icon-only{padding:6px 8px}
 .ff-dl-btn{flex:0 0 auto;min-width:96px;padding:8px 14px}
 .ff-dl-btn.ff-sent{background:rgba(33,208,122,.14);color:#21d07a;opacity:1}
 .ff-skel{display:block;animation:none}

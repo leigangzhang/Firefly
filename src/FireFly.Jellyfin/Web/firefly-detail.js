@@ -258,7 +258,7 @@
     var right = document.querySelector('.headerRight');
     if (!right || right.querySelector('.ff-header-btn')) return;
     right.insertBefore(el('button', {
-      is: 'paper-icon-button-light', class: 'headerButton ff-header-btn', title: T('FireFly 热门榜单'), onclick: openHot,
+      is: 'paper-icon-button-light', class: 'headerButton ff-header-btn', title: T('FireFly 热门榜单'), onclick: function () { F.enter(); },
     }, [el('span', { class: 'material-icons', text: 'local_fire_department', 'aria-hidden': 'true' })]), right.firstChild);
   }
 
@@ -279,6 +279,7 @@
         new MutationObserver(function () { tick(); }).observe(document.body, { childList: true, subtree: true });
         window.addEventListener('hashchange', tick);
         tick();
+        F.restore();
       });
     });
   }
