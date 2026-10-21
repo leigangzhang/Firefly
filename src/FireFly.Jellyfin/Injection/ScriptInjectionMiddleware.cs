@@ -20,7 +20,10 @@ public sealed class ScriptInjectionMiddleware
         _next = next;
     }
 
-    private static string Version => typeof(ScriptInjectionMiddleware).Assembly.GetName().Version?.ToString() ?? "0";
+    // 带上程序集的构建 ID（每次编译都会变）：版本号不变时重装插件，浏览器也会取新脚本而不是用缓存的旧版
+    private static string Version =>
+        (typeof(ScriptInjectionMiddleware).Assembly.GetName().Version?.ToString() ?? "0") + "-" +
+        typeof(ScriptInjectionMiddleware).Assembly.ManifestModule.ModuleVersionId.ToString("N")[..8];
 
     public async Task InvokeAsync(HttpContext context)
     {
