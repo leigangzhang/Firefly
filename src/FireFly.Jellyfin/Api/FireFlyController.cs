@@ -277,6 +277,7 @@ public sealed class FireFlyController : ControllerBase
                 inLibrary = InLibrary(mediaKind, detail.TmdbId, detail.Title, detail.Year),
                 favorite = _runtime.Favorites.Contains(mediaKind, detail.TmdbId),
                 showTrailers = _runtime.ShowTrailers,
+                language = _runtime.TmdbLanguage,
             });
         }
         catch (HttpRequestException ex)

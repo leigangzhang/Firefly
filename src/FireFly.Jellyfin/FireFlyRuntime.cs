@@ -36,7 +36,7 @@ public sealed class FireFlyRuntime
         Search = new SearchService(() => _sources, () => _rules, Keywords);
         Tmdb = new TmdbClient(_http, () => new TmdbSettings(
             Config.TmdbApiKey.Trim(),
-            string.IsNullOrWhiteSpace(Config.TmdbLanguage) ? "zh-CN" : Config.TmdbLanguage.Trim(),
+            TmdbLanguage,
             Pick(Config.TmdbApiBase, _rules.Tmdb.ApiBases),
             Pick(Config.TmdbImageBase, _rules.Tmdb.ImageBases)),
             MetadataCache,
@@ -78,6 +78,8 @@ public sealed class FireFlyRuntime
     public RulesDocument Rules => _rules;
 
     public bool ShowTrailers => Config.ShowTrailers;
+
+    public string TmdbLanguage => string.IsNullOrWhiteSpace(Config.TmdbLanguage) ? "zh-CN" : Config.TmdbLanguage.Trim();
 
     public int SourceCount => _sources.Count;
 

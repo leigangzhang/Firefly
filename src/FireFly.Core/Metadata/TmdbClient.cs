@@ -72,7 +72,8 @@ public sealed record TmdbDetail(
     IReadOnlyList<TmdbLogo> Networks,
     TmdbWatchProviders? Providers,
     IReadOnlyList<TmdbSeason> Seasons,
-    int? CurrentSeason = null);
+    int? CurrentSeason = null,
+    IReadOnlyList<int>? GenreIds = null);
 
 /// <summary>TMDb 连接设置。ApiBase / ImageBase 为空时用默认入口；入口被屏蔽时在配置页改成可用的地址。</summary>
 public sealed record TmdbSettings(string ApiKey, string Language, string? ApiBase = null, string? ImageBase = null)
@@ -513,7 +514,8 @@ public sealed class TmdbClient
                     Str(se, "overview"),
                     se.TryGetProperty("vote_average", out var sv) && sv.ValueKind == JsonValueKind.Number && sv.GetDouble() > 0 ? sv.GetDouble() : null))
                 .ToList(),
-            movie ? null : CurrentSeason(r, today ?? DateOnly.FromDateTime(DateTime.Now)));
+            movie ? null : CurrentSeason(r, today ?? DateOnly.FromDateTime(DateTime.Now)),
+            Arr(r, "genres").Select(g => Int(g, "id")).OfType<int>().ToList());
     }
 
     /// <summary>当前季：最近播出那一集所在的季；没有时取已开播的最大季，再没有取第 1 季。</summary>

@@ -857,9 +857,79 @@
   }
 
   // ---------- 资源详情页 ----------
-  var LANG = { zh: '汉语', cn: '粤语', en: '英语', ja: '日语', ko: '韩语', fr: '法语', de: '德语', es: '西班牙语', it: '意大利语', ru: '俄语', th: '泰语', hi: '印地语', pt: '葡萄牙语' };
-  var REGION = { CN: '中国大陆', HK: '中国香港', TW: '中国台湾', US: '美国', GB: '英国', JP: '日本', KR: '韩国', FR: '法国', DE: '德国', TH: '泰国', IN: '印度', ES: '西班牙', IT: '意大利', CA: '加拿大', AU: '澳大利亚' };
-  var STATUS = { Released: '已上映', 'Post Production': '后期制作', 'In Production': '制作中', Planned: '筹备中', Rumored: '传闻', Canceled: '已取消', 'Returning Series': '更新中', Ended: '已完结', Pilot: '试播' };
+  // 右侧信息栏跟随配置页的 TMDb 语言。语言名、地区名用浏览器的 Intl.DisplayNames 按该语言翻译；
+  // 港澳台用简短叫法（Intl 默认是"香港特别行政区"这类全称）；简体中文沿用原来的叫法
+  var REGION_SHORT = {
+    'zh-CN': { CN: '中国大陆', HK: '中国香港', TW: '中国台湾', MO: '中国澳门' },
+    'zh-TW': { HK: '香港', TW: '台灣', MO: '澳門' },
+    en: { HK: 'Hong Kong', TW: 'Taiwan', MO: 'Macau' },
+    ja: { HK: '香港', TW: '台湾', MO: 'マカオ' },
+    ko: { HK: '홍콩', TW: '대만', MO: '마카오' },
+  };
+  var SIDE_TEXT = {
+    'zh-CN': {
+      type: '资源类型', status: '状态', originalTitle: '原始片名', originalLanguage: '原始语言', firstAir: '首播日期', release: '上映日期',
+      countries: '出品地区', seasonsEpisodes: '季 / 集', runtime: '片长', certification: '分级', networks: '播出平台', streaming: '在线播放',
+      rentBuy: '租赁 / 购买', companies: '出品方', budget: '预算', revenue: '票房', homepage: '官方网站', viewOnTmdb: '在 TMDb 查看', noData: '暂无数据',
+      seasons: function (n) { return n + ' 季'; }, episodes: function (n) { return n + ' 集'; }, perEpisode: '每集约 ',
+      hours: function (h, m) { return h + '小时' + (m ? m + '分钟' : ''); }, mins: function (m) { return m + '分钟'; },
+      kinds: { series: '剧集', movie: '电影', anime: '动漫', animatedMovie: '动画电影', documentary: '纪录片', variety: '综艺' },
+      states: { Released: '已上映', 'Post Production': '后期制作', 'In Production': '制作中', Planned: '筹备中', Rumored: '传闻', Canceled: '已取消', 'Returning Series': '更新中', Ended: '已完结', Pilot: '试播' },
+    },
+    'zh-TW': {
+      type: '資源類型', status: '狀態', originalTitle: '原始片名', originalLanguage: '原始語言', firstAir: '首播日期', release: '上映日期',
+      countries: '出品地區', seasonsEpisodes: '季 / 集', runtime: '片長', certification: '分級', networks: '播出平台', streaming: '線上播放',
+      rentBuy: '租借 / 購買', companies: '出品方', budget: '預算', revenue: '票房', homepage: '官方網站', viewOnTmdb: '在 TMDb 查看', noData: '暫無資料',
+      seasons: function (n) { return n + ' 季'; }, episodes: function (n) { return n + ' 集'; }, perEpisode: '每集約 ',
+      hours: function (h, m) { return h + '小時' + (m ? m + '分鐘' : ''); }, mins: function (m) { return m + '分鐘'; },
+      kinds: { series: '劇集', movie: '電影', anime: '動漫', animatedMovie: '動畫電影', documentary: '紀錄片', variety: '綜藝' },
+      states: { Released: '已上映', 'Post Production': '後期製作', 'In Production': '製作中', Planned: '籌備中', Rumored: '傳聞', Canceled: '已取消', 'Returning Series': '更新中', Ended: '已完結', Pilot: '試播' },
+    },
+    en: {
+      type: 'Type', status: 'Status', originalTitle: 'Original Title', originalLanguage: 'Original Language', firstAir: 'First Air Date', release: 'Release Date',
+      countries: 'Country', seasonsEpisodes: 'Seasons / Episodes', runtime: 'Runtime', certification: 'Rating', networks: 'Network', streaming: 'Streaming',
+      rentBuy: 'Rent / Buy', companies: 'Production', budget: 'Budget', revenue: 'Revenue', homepage: 'Homepage', viewOnTmdb: 'View on TMDb', noData: 'No data',
+      seasons: function (n) { return n + (n === 1 ? ' season' : ' seasons'); }, episodes: function (n) { return n + (n === 1 ? ' episode' : ' episodes'); }, perEpisode: '~',
+      hours: function (h, m) { return h + 'h' + (m ? ' ' + m + 'm' : ''); }, mins: function (m) { return m + 'm'; },
+      kinds: { series: 'TV Series', movie: 'Movie', anime: 'Anime', animatedMovie: 'Animated Film', documentary: 'Documentary', variety: 'Reality / Talk Show' },
+      states: { Released: 'Released', 'Post Production': 'Post Production', 'In Production': 'In Production', Planned: 'Planned', Rumored: 'Rumored', Canceled: 'Canceled', 'Returning Series': 'Returning Series', Ended: 'Ended', Pilot: 'Pilot' },
+    },
+    ja: {
+      type: '種類', status: 'ステータス', originalTitle: '原題', originalLanguage: '原語', firstAir: '初回放送日', release: '公開日',
+      countries: '製作国', seasonsEpisodes: 'シーズン / 話数', runtime: '上映時間', certification: 'レーティング', networks: '放送局', streaming: '配信',
+      rentBuy: 'レンタル / 購入', companies: '製作会社', budget: '製作費', revenue: '興行収入', homepage: '公式サイト', viewOnTmdb: 'TMDb で見る', noData: 'データなし',
+      seasons: function (n) { return n + ' シーズン'; }, episodes: function (n) { return n + ' 話'; }, perEpisode: '1話 約',
+      hours: function (h, m) { return h + '時間' + (m ? m + '分' : ''); }, mins: function (m) { return m + '分'; },
+      kinds: { series: 'ドラマ', movie: '映画', anime: 'アニメ', animatedMovie: 'アニメ映画', documentary: 'ドキュメンタリー', variety: 'バラエティ' },
+      states: { Released: '公開済み', 'Post Production': 'ポストプロダクション', 'In Production': '製作中', Planned: '企画中', Rumored: '噂', Canceled: '中止', 'Returning Series': '放送中', Ended: '完結', Pilot: 'パイロット' },
+    },
+    ko: {
+      type: '유형', status: '상태', originalTitle: '원제', originalLanguage: '원어', firstAir: '첫 방송일', release: '개봉일',
+      countries: '제작 국가', seasonsEpisodes: '시즌 / 에피소드', runtime: '러닝타임', certification: '등급', networks: '방송사', streaming: '스트리밍',
+      rentBuy: '대여 / 구매', companies: '제작사', budget: '제작비', revenue: '수익', homepage: '공식 사이트', viewOnTmdb: 'TMDb에서 보기', noData: '데이터 없음',
+      seasons: function (n) { return '시즌 ' + n + '개'; }, episodes: function (n) { return n + '화'; }, perEpisode: '회당 약 ',
+      hours: function (h, m) { return h + '시간' + (m ? ' ' + m + '분' : ''); }, mins: function (m) { return m + '분'; },
+      kinds: { series: 'TV 시리즈', movie: '영화', anime: '애니메이션', animatedMovie: '애니메이션 영화', documentary: '다큐멘터리', variety: '예능' },
+      states: { Released: '개봉', 'Post Production': '후반 작업', 'In Production': '제작 중', Planned: '기획 중', Rumored: '루머', Canceled: '취소', 'Returning Series': '방영 중', Ended: '종영', Pilot: '파일럿' },
+    },
+  };
+  function sideText(lang) {
+    lang = lang || 'zh-CN';
+    if (lang === 'zh-HK') lang = 'zh-TW';
+    return SIDE_TEXT[lang] || SIDE_TEXT[lang.split('-')[0]] || SIDE_TEXT['zh-CN'];
+  }
+  function displayName(type, code, lang) {
+    if (!code) return code;
+    lang = lang || 'zh-CN';
+    var short = REGION_SHORT[lang === 'zh-HK' ? 'zh-TW' : lang] || REGION_SHORT[lang.split('-')[0]];
+    if (type === 'region' && short && short[code]) return short[code];
+    try {
+      // TMDb 用 cn 表示粤语
+      return new Intl.DisplayNames([lang], { type: type, fallback: 'code' }).of(type === 'language' && code === 'cn' ? 'yue' : code) || code;
+    } catch (e) {
+      return code;
+    }
+  }
 
   function beginDetail() {
     if (page.list.style.display !== 'none') page.scroll = scroller().scrollTop;
@@ -884,7 +954,10 @@
   }
 
   function money(n) { return n ? '$' + Number(n).toLocaleString('en-US') : null; }
-  function minutes(m) { return m ? (m >= 60 ? Math.floor(m / 60) + '小时' + (m % 60 ? (m % 60) + '分钟' : '') : m + '分钟') : null; }
+  function minutes(m, t) {
+    t = t || SIDE_TEXT['zh-CN'];
+    return m ? (m >= 60 ? t.hours(Math.floor(m / 60), m % 60) : t.mins(m)) : null;
+  }
 
   function scoreRing(rating) {
     var pct = Math.round((rating || 0) * 10);
@@ -920,7 +993,7 @@
     } }) : null;
 
     var facts = [d.certification ? el('span', { class: 'ff-cert', text: d.certification }) : null,
-      el('span', { text: [d.releaseDate, d.genres.join(' / '), minutes(d.runtime)].filter(Boolean).join(' · ') })];
+      el('span', { text: [d.releaseDate, d.genres.join(' / '), minutes(d.runtime, sideText(meta.language))].filter(Boolean).join(' · ') })];
 
     body.appendChild(el('div', { class: 'ff-hero', style: d.backdropUrl ? 'background-image:url("' + tmdbImg(d.backdropUrl) + '")' : '' }, [
       el('div', { class: 'ff-hero-in' }, [
@@ -990,79 +1063,38 @@
     // 4. 分季：默认只显示当前季，"查看全部季"在下方展开其余各季
     if (isTv && d.seasons.length) main.appendChild(seasonSection(d));
 
-    // 右侧栏
+    // 右侧栏（跟随 TMDb 语言）
     var p = d.providers;
-    put(side, fact('资源类型', resourceType(d)));
-    put(side, fact('状态', STATUS[d.status] || d.status));
-    put(side, fact('原始片名', d.originalTitle || d.title));
-    put(side, fact('原始语言', LANG[d.originalLanguage] || d.originalLanguage));
-    put(side, fact(isTv ? '首播日期' : '上映日期', d.releaseDate));
-    put(side, fact('出品地区', d.countries.map(function (c) { return REGION[c] || c; }).join(' / ')));
-    if (isTv) put(side, fact('季 / 集', [d.seasonCount ? d.seasonCount + ' 季' : null, d.episodeCount ? d.episodeCount + ' 集' : null].filter(Boolean).join(' / ')));
-    put(side, fact('片长', minutes(d.runtime) && (isTv ? '每集约 ' : '') + minutes(d.runtime)));
-    put(side, fact('分级', d.certification));
-    if (isTv) put(side, logos('播出平台', d.networks));
-    put(side, logos(p ? '在线播放（' + (REGION[p.region] || p.region) + '）' : '在线播放', p ? p.stream : [], p && p.link));
-    if (p && (p.rent.length || p.buy.length)) put(side, logos('租赁 / 购买', p.rent.concat(p.buy).filter(function (x, i, a) { return a.findIndex(function (y) { return y.name === x.name; }) === i; }), p.link));
-    put(side, logos('出品方', d.companies));
-    if (!isTv) { put(side, fact('预算', money(d.budget))); put(side, fact('票房', money(d.revenue))); }
-    if (d.homepage) side.appendChild(el('div', { class: 'ff-fact' }, [el('div', { class: 'ff-fact-k', text: '官方网站' }), el('a', { href: d.homepage, target: '_blank', rel: 'noopener', class: 'ff-link', text: d.homepage.replace(/^https?:\/\//, '').replace(/\/$/, '') })]));
-    side.appendChild(el('a', { class: 'ff-dim ff-small', href: 'https://www.themoviedb.org/' + (isTv ? 'tv' : 'movie') + '/' + d.tmdbId, target: '_blank', rel: 'noopener', text: '在 TMDb 查看' }));
+    var lang = meta.language;
+    var t = sideText(lang);
+    var runtime = minutes(d.runtime, t);
+    put(side, fact(t.type, resourceType(d, t)));
+    put(side, fact(t.status, t.states[d.status] || d.status));
+    put(side, fact(t.originalTitle, d.originalTitle || d.title));
+    put(side, fact(t.originalLanguage, displayName('language', d.originalLanguage, lang)));
+    put(side, fact(isTv ? t.firstAir : t.release, d.releaseDate));
+    put(side, fact(t.countries, d.countries.map(function (c) { return displayName('region', c, lang); }).join(' / ')));
+    if (isTv) put(side, fact(t.seasonsEpisodes, [d.seasonCount ? t.seasons(d.seasonCount) : null, d.episodeCount ? t.episodes(d.episodeCount) : null].filter(Boolean).join(' / ')));
+    put(side, fact(t.runtime, runtime && (isTv ? t.perEpisode : '') + runtime));
+    put(side, fact(t.certification, d.certification));
+    if (isTv) put(side, logos(t.networks, d.networks));
+    put(side, logos(p ? t.streaming + '（' + displayName('region', p.region, lang) + '）' : t.streaming, p ? p.stream : [], p && p.link, t.noData));
+    if (p && (p.rent.length || p.buy.length)) put(side, logos(t.rentBuy, p.rent.concat(p.buy).filter(function (x, i, a) { return a.findIndex(function (y) { return y.name === x.name; }) === i; }), p.link));
+    put(side, logos(t.companies, d.companies));
+    if (!isTv) { put(side, fact(t.budget, money(d.budget))); put(side, fact(t.revenue, money(d.revenue))); }
+    if (d.homepage) side.appendChild(el('div', { class: 'ff-fact' }, [el('div', { class: 'ff-fact-k', text: t.homepage }), el('a', { href: d.homepage, target: '_blank', rel: 'noopener', class: 'ff-link', text: d.homepage.replace(/^https?:\/\//, '').replace(/\/$/, '') })]));
+    side.appendChild(el('a', { class: 'ff-dim ff-small', href: 'https://www.themoviedb.org/' + (isTv ? 'tv' : 'movie') + '/' + d.tmdbId, target: '_blank', rel: 'noopener', text: t.viewOnTmdb }));
   }
 
-  function seasonSection(d) {
-    var current = d.seasons.filter(function (s) { return s.number === d.currentSeason; })[0] || d.seasons[d.seasons.length - 1];
-    var latest = d.seasons.reduce(function (m, s) { return s.number > m ? s.number : m; }, 0);
-    var others = d.seasons.filter(function (s) { return s !== current; }).sort(function (a, b) { return b.number - a.number; });
-    var list = el('div', { class: 'ff-season-list' }, [seasonCard(d, current)]);
-    var rest = null;
-    var toggle = others.length ? el('button', { class: 'ff-link-btn', text: '查看全部季（共 ' + d.seasons.length + ' 季）', onclick: function () {
-      if (!rest) {
-        rest = el('div', { class: 'ff-season-list' }, others.map(function (s) { return seasonCard(d, s); }));
-        list.parentNode.insertBefore(rest, toggle);
-      } else {
-        rest.style.display = rest.style.display === 'none' ? '' : 'none';
-      }
-      toggle.textContent = rest.style.display === 'none' ? '查看全部季（共 ' + d.seasons.length + ' 季）' : '收起其他季';
-    } }) : null;
-    return section(current.number === latest ? '最新一季' : '当前季', list, toggle);
-  }
-
-  function cnDate(s) {
-    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '');
-    return m ? m[1] + ' 年 ' + m[2] + ' 月 ' + m[3] + ' 日' : '';
-  }
-
-  function seasonCard(d, s) {
-    var foot = el('div', { class: 'ff-season-foot' }, [el('span', { class: 'ff-dim', text: s.airDate ? '首播 ' + cnDate(s.airDate) : '' })]);
-    api('GET', 'detail/tv/' + d.tmdbId + '/season/' + s.number).then(function (r) {
-      var e = r.episode;
-      if (!e) return;
-      foot.innerHTML = '';
-      foot.appendChild(el('span', { class: 'material-icons ff-cal', text: 'event', 'aria-hidden': 'true' }));
-      foot.appendChild(el('span', { class: 'ff-ep-name', text: e.name || ('第 ' + e.episode + ' 集') }));
-      foot.appendChild(el('span', { text: '(' + e.season + 'x' + e.episode + (e.airDate ? ', ' + cnDate(e.airDate) : '') + ')' + (e.aired ? '' : ' 即将开播') }));
-    }).catch(function () {});
-    return el('div', { class: 'ff-season-card' }, [
-      el('div', { class: 'ff-season-poster' }, [s.posterUrl ? el('img', { src: tmdbImg(s.posterUrl), loading: 'lazy', alt: s.name }) : el('div', { class: 'ff-noposter' })]),
-      el('div', { class: 'ff-season-body' }, [
-        el('h3', { class: 'ff-season-title', text: s.name || ('第 ' + s.number + ' 季') }),
-        el('div', { class: 'ff-season-meta' }, [
-          s.rating ? el('span', { class: 'ff-badge', text: '★ ' + Math.round(s.rating * 10) + '%' }) : null,
-          el('span', { text: [s.year, s.episodeCount ? '共 ' + s.episodeCount + ' 集' : null].filter(Boolean).join(' • ') }),
-        ]),
-        s.overview ? el('p', { class: 'ff-season-overview', text: s.overview }) : null,
-        foot,
-      ]),
-    ]);
-  }
-
-  function resourceType(d) {
-    var g = d.genres.join('/');
-    if (/动画/.test(g)) return d.kind === 'Series' ? '动漫' : '动画电影';
-    if (/纪录/.test(g)) return '纪录片';
-    if (d.kind === 'Series' && /真人秀|脱口秀/.test(g)) return '综艺';
-    return d.kind === 'Series' ? '剧集' : '电影';
+  // 按 TMDb 类型 ID 判断，不依赖类型名称的语言：16 动画、99 纪录、10764 真人秀、10767 脱口秀
+  function resourceType(d, t) {
+    var ids = d.genreIds || [];
+    var has = function (id) { return ids.indexOf(id) >= 0; };
+    var series = d.kind === 'Series';
+    if (has(16)) return series ? t.kinds.anime : t.kinds.animatedMovie;
+    if (has(99)) return t.kinds.documentary;
+    if (series && (has(10764) || has(10767))) return t.kinds.variety;
+    return series ? t.kinds.series : t.kinds.movie;
   }
 
   function section(title) {
@@ -1072,8 +1104,9 @@
   }
   function fact(k, v) { return v ? el('div', { class: 'ff-fact' }, [el('div', { class: 'ff-fact-k', text: k }), el('div', { text: String(v) })]) : null; }
   function put(parent, child) { if (child) parent.appendChild(child); return child; }
-  function logos(k, list, link) {
-    if (!list || !list.length) return k.indexOf('在线播放') === 0 ? fact(k, '暂无数据') : null;
+  // empty 有值时，列表为空也显示这一栏（如"在线播放：暂无数据"）
+  function logos(k, list, link, empty) {
+    if (!list || !list.length) return empty ? fact(k, empty) : null;
     return el('div', { class: 'ff-fact' }, [el('div', { class: 'ff-fact-k', text: k }), el('div', { class: 'ff-logos' }, list.map(function (x) {
       var inner = x.logoUrl ? el('img', { src: tmdbImg(x.logoUrl), alt: x.name, title: x.name, loading: 'lazy' }) : el('span', { class: 'ff-chip', text: x.name });
       return link ? el('a', { href: link, target: '_blank', rel: 'noopener', title: x.name }, [inner]) : inner;

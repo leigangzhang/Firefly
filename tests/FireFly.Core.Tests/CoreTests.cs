@@ -1031,6 +1031,7 @@ public class DiscoverTests
         Assert.Equal(148, d.Runtime);
         Assert.Equal("PG-13", d.Certification);
         Assert.Equal(new[] { "动作", "科幻" }, d.Genres);
+        Assert.Equal(new[] { 28, 878 }, d.GenreIds);
         Assert.Equal("导演 / 编剧", d.Directors.Single().Role);
         Assert.Equal("柯布", d.Cast.Single().Role);
         Assert.Equal(new[] { "t2", "t1" }, d.Videos.Select(v => v.Key));
