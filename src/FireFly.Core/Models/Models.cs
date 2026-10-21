@@ -34,11 +34,53 @@ public sealed record MediaQuery
     /// <summary>该季在 TMDb 上的集数，用来区分"整季包"和名字只写了季号的分集包；未知为空。</summary>
     public int? SeasonEpisodes { get; init; }
 
+    /// <summary>资源类型（MediaCategories 里的 key），决定请求哪些站点、用哪些关键词；为空时按电影 / 剧集。</summary>
+    public string? Category { get; init; }
+
+    /// <summary>实际使用的类型：没指定时电影按 movie、剧集按 tv。</summary>
+    public string EffectiveCategory => Category ?? (Kind == MediaKind.Movie ? MediaCategories.Movie : MediaCategories.Tv);
+
     /// <summary>标识一部片 / 一季的键，用作搜索缓存键。</summary>
     public string TitleKey =>
-        Kind == MediaKind.Movie
+        (Kind == MediaKind.Movie
             ? $"movie:{TmdbId ?? Title}:{Year}"
-            : $"series:{TmdbId ?? Title}:{Year}:s{Season ?? 1}";
+            : $"series:{TmdbId ?? Title}:{Year}:s{Season ?? 1}") + ":" + EffectiveCategory;
+}
+
+/// <summary>资源类型，和规则里 discover.categories 的 key 一致。</summary>
+public static class MediaCategories
+{
+    public const string Movie = "movie";
+    public const string Tv = "tv";
+    public const string Anime = "anime";
+    public const string Variety = "variety";
+    public const string Documentary = "documentary";
+
+    public static readonly IReadOnlyList<string> All = new[] { Movie, Tv, Anime, Variety, Documentary };
+
+    /// <summary>按 TMDb 类型判断：动画（16）→ 动漫，纪录（99）→ 纪录片，剧集里的真人秀 / 脱口秀（10764 / 10767）→ 综艺，其余按电影 / 剧集。</summary>
+    public static string Of(MediaKind kind, IEnumerable<int> genres)
+    {
+        var set = genres.ToHashSet();
+        if (set.Contains(16))
+        {
+            return Anime;
+        }
+
+        if (set.Contains(99))
+        {
+            return Documentary;
+        }
+
+        if (kind == MediaKind.Series && (set.Contains(10764) || set.Contains(10767)))
+        {
+            return Variety;
+        }
+
+        return kind == MediaKind.Movie ? Movie : Tv;
+    }
+
+    public static bool IsKnown(string? category) => category is not null && All.Contains(category);
 }
 
 public sealed record ReleaseFile(string Path, long Size);
@@ -64,6 +106,10 @@ public sealed record Release
 
     /// <summary>提交下载时生成的干净名称（见 ReleaseDisplay），展示用；Name 保留原始发布名供匹配文件。</summary>
     public string? DisplayName { get; init; }
+
+    /// <summary>标题命中的第一个优选关键词在优先级列表里的位置（0 最优先）；没命中为空。排序时填写。</summary>
+    [JsonIgnore]
+    public int? KeywordRank { get; init; }
 }
 
 /// <summary>从标题里解析出的展示字段。只用于展示、过滤和排序，不打分。</summary>

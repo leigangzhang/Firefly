@@ -17,23 +17,64 @@ public static class SourceFactory
 {
     public const string JsonApi = "jsonApi";
 
+    public const string Torznab = "torznab";
+
     /// <summary>按规则建搜索源；类型不认识的源跳过，并记进 rules.Warnings。</summary>
     public static IReadOnlyList<IResourceSource> Create(RulesDocument rules, HttpClient http)
     {
         var sources = new List<IResourceSource>();
         foreach (var rule in rules.Sources.Where(s => s.Enabled))
         {
-            if (string.Equals(rule.Kind, JsonApi, StringComparison.OrdinalIgnoreCase) && rule.Endpoints.Count > 0 && rule.Response.ItemsPath.Length > 0)
+            if (TryCreate(rule, http, out var source, out var problem))
             {
-                sources.Add(new JsonApiSource(rule, http));
+                sources.Add(source);
             }
             else
             {
-                rules.Warnings.Add($"搜索源 {rule.Name} 的类型 {rule.Kind} 不受支持或缺少 endpoints / response.itemsPath，已跳过");
+                rules.Warnings.Add(problem);
             }
         }
 
         return sources;
+    }
+
+    /// <summary>建一个源（配置页测试站点时也用）；规则不完整时给出原因。</summary>
+    public static bool TryCreate(SourceRule rule, HttpClient http, out IResourceSource source, out string problem)
+    {
+        source = null!;
+        problem = string.Empty;
+        if (string.IsNullOrWhiteSpace(rule.Name))
+        {
+            problem = "搜索源缺少 name，已跳过";
+            return false;
+        }
+
+        if (rule.Endpoints.Count == 0)
+        {
+            problem = $"搜索源 {rule.Name} 缺少地址（endpoints），已跳过";
+            return false;
+        }
+
+        if (string.Equals(rule.Kind, JsonApi, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrEmpty(rule.Response.ItemsPath))
+            {
+                problem = $"搜索源 {rule.Name} 缺少结果列表路径（response.itemsPath），已跳过";
+                return false;
+            }
+
+            source = new JsonApiSource(rule, http);
+            return true;
+        }
+
+        if (string.Equals(rule.Kind, Torznab, StringComparison.OrdinalIgnoreCase))
+        {
+            source = new TorznabSource(rule, http);
+            return true;
+        }
+
+        problem = $"搜索源 {rule.Name} 的类型 {rule.Kind} 不受支持，已跳过";
+        return false;
     }
 }
 
@@ -143,9 +184,18 @@ public sealed class JsonApiSource : IResourceSource
     internal static Release ToRelease(SourceRule rule, JsonElement item)
     {
         var fields = rule.Response.Fields;
-        var hash = (Text(Find(item, fields.InfoHash)) ?? string.Empty).Trim().ToUpperInvariant();
-        var name = Text(Find(item, fields.Name)) ?? hash;
+        var rawHash = (Text(Find(item, fields.InfoHash)) ?? string.Empty).Trim();
         var magnet = Text(Find(item, fields.Magnet));
+        // 有的站没有单独的 hash 字段，只给磁力链接；Base32 的 hash 也统一成十六进制
+        var hash = TorznabSource.Normalize(rawHash.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase) ? TorznabSource.HashFromMagnet(rawHash) : rawHash)
+            ?? TorznabSource.Normalize(TorznabSource.HashFromMagnet(magnet))
+            ?? rawHash.ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(magnet) && rawHash.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
+        {
+            magnet = rawHash;
+        }
+
+        var name = Text(Find(item, fields.Name)) ?? hash;
         var files = Find(item, fields.Files) is { ValueKind: JsonValueKind.Array } list
             ? list.EnumerateArray().Select(f => new ReleaseFile(Text(Find(f, fields.FilePath)) ?? string.Empty, Number(Find(f, fields.FileSize)))).ToList()
             : new List<ReleaseFile>();
@@ -163,7 +213,7 @@ public sealed class JsonApiSource : IResourceSource
     }
 
     /// <summary>按点分隔的路径取值；路径为空返回 null。</summary>
-    internal static JsonElement? Find(JsonElement root, string? path)
+    public static JsonElement? Find(JsonElement root, string? path)
     {
         if (string.IsNullOrEmpty(path))
         {
@@ -203,8 +253,15 @@ public sealed class JsonApiSource : IResourceSource
             return DateTimeOffset.TryParse(Text(e), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var d) ? d : null;
         }
 
-        var seconds = Number(e);
-        return seconds > 0 ? DateTimeOffset.FromUnixTimeSeconds(seconds) : null;
+        var value = Number(e);
+        if (value <= 0)
+        {
+            return null;
+        }
+
+        return string.Equals(format, "unixms", StringComparison.OrdinalIgnoreCase)
+            ? DateTimeOffset.FromUnixTimeMilliseconds(value)
+            : DateTimeOffset.FromUnixTimeSeconds(value);
     }
 }
 

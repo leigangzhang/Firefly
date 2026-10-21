@@ -26,6 +26,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>详情页是否显示 YouTube 预告片。大陆网络不翻墙时 YouTube 打不开，默认关闭。</summary>
     public bool ShowTrailers { get; set; }
 
-    /// <summary>发布者关键词，一行一个；空 = 用规则文件默认值。</summary>
+    /// <summary>旧版配置页的发布者关键词（一行一个）。启动时迁移进 RulesOverlay 后清空。</summary>
     public string PublisherKeywords { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 配置页的站点和关键词设置：一段和 rules.json 覆盖片段格式相同的 JSON，叠加在内置规则和 rules.json 之上。
+    /// 空 = 没有改动。
+    /// </summary>
+    public string RulesOverlay { get; set; } = string.Empty;
 }

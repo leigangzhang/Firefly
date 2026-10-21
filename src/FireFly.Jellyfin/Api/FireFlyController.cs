@@ -16,8 +16,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FireFly.Jellyfin.Api;
 
-/// <summary>Stage：preferred 先返回优选结果，fallback 追加降级结果；不传则一次做完。</summary>
-public sealed record SearchRequest(string? ItemId, string? Title, string? OriginalTitle, int? Year, MediaKind? Kind, int? Season, string? TmdbId, bool Refresh, SearchStage? Stage = null);
+/// <summary>
+/// Stage：preferred 先返回优选结果，fallback 追加降级结果；不传则一次做完。
+/// Category：按哪种资源类型搜（movie / tv / anime / variety / documentary）；不传时按 TMDb 类型自动判断。
+/// </summary>
+public sealed record SearchRequest(string? ItemId, string? Title, string? OriginalTitle, int? Year, MediaKind? Kind, int? Season, string? TmdbId, bool Refresh, SearchStage? Stage = null, string? Category = null);
 
 /// <summary>提交下载只带版本 ID（InfoHash），完整版本和磁力由服务端从搜索缓存里找回。</summary>
 public sealed record SubmitRequest(MediaQuery Query, string ReleaseId);
@@ -425,8 +428,9 @@ public sealed class FireFlyController : ControllerBase
             return ApiJson(new { error = "无法识别要搜索的影片" }, StatusCodes.Status400BadRequest);
         }
 
-        query = await WithTmdbNamesAsync(query, ct).ConfigureAwait(false);
+        query = await WithTmdbNamesAsync(query, request.Category, ct).ConfigureAwait(false);
         var result = await _runtime.Search.SearchAsync(query, request.Refresh, request.Stage ?? SearchStage.Full, ct).ConfigureAwait(false);
+        var categories = _runtime.Rules.Discover.Categories;
 
         // 只下发干净名称和画质信息：不下发原始发布名、磁力、发布站、搜索词和出错的源地址，
         // 避免上游站点被识别、也避免绕过插件直接去资源站搜索
@@ -441,13 +445,26 @@ public sealed class FireFlyController : ControllerBase
                 r.SizeBytes,
                 r.CreatedAt,
                 fileCount = r.Files.Count,
-                preferred = !string.IsNullOrEmpty(r.Traits.Publisher),
+                preferred = r.KeywordRank is not null,
                 demoted = SearchService.Demotion(r) > 0,
                 traits = new { r.Traits.Resolution, r.Traits.Codec, r.Traits.Hdr, r.Traits.MediaSource, r.Traits.Audio, r.Traits.Subtitles },
             }),
             sourceErrors = result.Errors.Count,
             fromCache = result.FromCache,
             needsFallback = result.NeedsFallback,
+
+            // 只给类型和数量，不给站点名和关键词
+            plan = result.Plan is { } plan
+                ? new
+                {
+                    plan.Category,
+                    categoryLabel = categories.FirstOrDefault(c => c.Key == plan.Category)?.Label ?? plan.Category,
+                    plan.Sources,
+                    plan.Keywords,
+                    plan.NoSiteForCategory,
+                }
+                : null,
+            categories = categories.Select(c => new { c.Key, c.Label }),
         });
     }
 
@@ -495,9 +512,17 @@ public sealed class FireFlyController : ControllerBase
     [Authorize(Policy = Elevated)]
     public IActionResult Dismiss(string id) => _runtime.App.Dismiss(id) ? Ok() : NotFound();
 
-    /// <summary>有 TMDb ID 时补上原名和中文别名，供资源搜索换名重试；TMDb 不可用时照常用已有片名搜索。</summary>
-    private async Task<MediaQuery> WithTmdbNamesAsync(MediaQuery query, CancellationToken ct)
+    /// <summary>
+    /// 有 TMDb ID 时补上原名和中文别名，供资源搜索换名重试，并按 TMDb 类型判断资源类型；TMDb 不可用时照常用已有片名搜索。
+    /// 前端指定了类型（用户在面板里切换）时用指定的。
+    /// </summary>
+    private async Task<MediaQuery> WithTmdbNamesAsync(MediaQuery query, string? category, CancellationToken ct)
     {
+        if (MediaCategories.IsKnown(category))
+        {
+            query = query with { Category = category };
+        }
+
         if (string.IsNullOrWhiteSpace(query.TmdbId) || !_runtime.Tmdb.Configured)
         {
             return query;
@@ -511,6 +536,7 @@ public sealed class FireFlyController : ControllerBase
                 OriginalTitle = query.OriginalTitle ?? Different(names.OriginalTitle, query.Title),
                 AlternateTitles = names.AlternateTitles,
                 SeasonEpisodes = query.Kind == MediaKind.Series && names.SeasonEpisodes?.TryGetValue(query.Season ?? 1, out var count) == true ? count : null,
+                Category = query.Category ?? MediaCategories.Of(query.Kind, names.Genres),
             };
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)

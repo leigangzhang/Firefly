@@ -2,82 +2,965 @@
 <html>
 <head><title>FireFly</title></head>
 <body>
-<div id="FireFlyConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-textarea">
+<div id="FireFlyConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-textarea,emby-select,emby-checkbox">
+  <style>
+    #FireFlyConfigPage .ffc-nav { display: flex; flex-wrap: wrap; gap: .5em; margin: 0 0 1.2em; }
+    #FireFlyConfigPage .ffc-nav a { padding: .3em 1em; border-radius: 999px; border: 1px solid rgba(128,128,128,.35); text-decoration: none; color: inherit; font-size: .92em; }
+    #FireFlyConfigPage .ffc-nav a:hover { border-color: #00a4dc; }
+    #FireFlyConfigPage details.ffc-group, #FireFlyConfigPage section.ffc-group { border: 1px solid rgba(128,128,128,.25); border-radius: 10px; padding: .9em 1.2em; margin: 0 0 1.2em; background: rgba(128,128,128,.06); }
+    #FireFlyConfigPage details.ffc-group > summary { cursor: pointer; font-size: 1.1em; font-weight: 500; padding: .2em 0; }
+    #FireFlyConfigPage details.ffc-group > summary .ffc-sum { font-size: .8em; font-weight: 400; opacity: .7; margin-left: .8em; }
+    #FireFlyConfigPage details.ffc-group[open] > summary { margin-bottom: 1em; }
+    #FireFlyConfigPage .ffc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1em; flex-wrap: wrap; margin-bottom: .8em; }
+    #FireFlyConfigPage .ffc-head h3 { margin: 0 0 .2em; font-size: 1.25em; }
+    #FireFlyConfigPage .ffc-desc { font-size: .85em; opacity: .75; }
+    #FireFlyConfigPage .ffc-btn { display: inline-flex; align-items: center; gap: .35em; border: 1px solid rgba(128,128,128,.45); background: rgba(128,128,128,.12); color: inherit; border-radius: 6px; padding: .4em .9em; cursor: pointer; font: inherit; font-size: .92em; min-height: 2.2em; }
+    #FireFlyConfigPage .ffc-btn:hover { border-color: #00a4dc; }
+    #FireFlyConfigPage .ffc-btn:disabled { opacity: .5; cursor: default; }
+    #FireFlyConfigPage .ffc-btn-primary { background: #00a4dc; border-color: #00a4dc; color: #001018; font-weight: 500; }
+    #FireFlyConfigPage .ffc-btn-link { border: none; background: none; color: #33b5e5; padding: .4em .3em; }
+    #FireFlyConfigPage .ffc-btn-danger { border-color: rgba(248,81,73,.6); color: #ff8f8f; background: none; }
+    #FireFlyConfigPage .ffc-icon { width: 2.2em; padding: 0; justify-content: center; }
+    #FireFlyConfigPage .ffc-sites { border: 1px solid rgba(128,128,128,.25); border-radius: 8px; overflow: hidden; }
+    #FireFlyConfigPage .ffc-site { border-bottom: 1px solid rgba(128,128,128,.2); }
+    #FireFlyConfigPage .ffc-site:last-child { border-bottom: none; }
+    #FireFlyConfigPage .ffc-site.ffc-drop { box-shadow: inset 0 2px 0 #00a4dc; }
+    #FireFlyConfigPage .ffc-row { display: flex; align-items: center; gap: .7em; padding: .6em .8em; flex-wrap: wrap; }
+    #FireFlyConfigPage .ffc-grip { cursor: grab; opacity: .5; font-size: 1.2em; user-select: none; width: 1em; }
+    #FireFlyConfigPage .ffc-dot { width: .65em; height: .65em; border-radius: 50%; flex: none; background: #777; }
+    #FireFlyConfigPage .ffc-dot.ok { background: #3fb950; } #FireFlyConfigPage .ffc-dot.warn { background: #d29922; } #FireFlyConfigPage .ffc-dot.bad { background: #f85149; }
+    #FireFlyConfigPage .ffc-name { background: none; border: none; color: inherit; font: inherit; font-weight: 500; font-size: 1.02em; cursor: pointer; padding: .2em 0; min-width: 8em; text-align: left; }
+    #FireFlyConfigPage .ffc-badge { font-size: .75em; padding: .05em .55em; border-radius: 4px; border: 1px solid rgba(128,128,128,.4); opacity: .85; }
+    #FireFlyConfigPage .ffc-status { flex: 1 1 12em; font-size: .82em; opacity: .75; }
+    #FireFlyConfigPage .ffc-status.bad { color: #ff8f8f; opacity: 1; }
+    #FireFlyConfigPage .ffc-chips { display: flex; flex-wrap: wrap; gap: .35em; }
+    #FireFlyConfigPage .ffc-chip { border-radius: 999px; padding: .15em .75em; font-size: .82em; cursor: pointer; border: 1px solid rgba(128,128,128,.4); background: none; color: inherit; opacity: .6; font-family: inherit; min-height: 2em; }
+    #FireFlyConfigPage .ffc-chip.on { opacity: 1; background: rgba(0,164,220,.18); border-color: #00a4dc; }
+    #FireFlyConfigPage .ffc-switch { width: 2.9em; height: 1.6em; border-radius: 1em; border: none; background: rgba(128,128,128,.5); position: relative; cursor: pointer; flex: none; }
+    #FireFlyConfigPage .ffc-switch::after { content: ''; position: absolute; top: .2em; left: .2em; width: 1.2em; height: 1.2em; border-radius: 50%; background: #fff; transition: left .15s; }
+    #FireFlyConfigPage .ffc-switch.on { background: #00a4dc; } #FireFlyConfigPage .ffc-switch.on::after { left: 1.5em; }
+    #FireFlyConfigPage .ffc-detail { padding: .2em .8em 1em 3.2em; display: flex; flex-direction: column; gap: .6em; }
+    #FireFlyConfigPage .ffc-input { background: rgba(0,0,0,.25); border: 1px solid rgba(128,128,128,.4); border-radius: 6px; color: inherit; padding: .45em .6em; font: inherit; font-size: .92em; }
+    #FireFlyConfigPage .ffc-input:focus { outline: none; border-color: #00a4dc; }
+    #FireFlyConfigPage .ffc-endpoint { display: flex; gap: .5em; align-items: center; flex-wrap: wrap; }
+    #FireFlyConfigPage .ffc-endpoint .ffc-input { flex: 1 1 20em; }
+    #FireFlyConfigPage .ffc-kws { display: flex; flex-wrap: wrap; gap: .5em; align-items: center; }
+    #FireFlyConfigPage .ffc-kw { display: inline-flex; align-items: center; gap: .45em; padding: .25em .4em .25em .8em; border-radius: 999px; border: 1px solid rgba(0,164,220,.6); background: rgba(0,164,220,.12); cursor: grab; }
+    #FireFlyConfigPage .ffc-kw.off { opacity: .5; border-color: rgba(128,128,128,.4); background: none; text-decoration: line-through; }
+    #FireFlyConfigPage .ffc-kw.editing { border-color: #33b5e5; box-shadow: 0 0 0 1px #33b5e5; }
+    #FireFlyConfigPage .ffc-kw.ffc-drop { box-shadow: -3px 0 0 #00a4dc; }
+    #FireFlyConfigPage .ffc-kw .ffc-rank { font-size: .75em; opacity: .65; }
+    #FireFlyConfigPage .ffc-kw .ffc-scope { font-size: .72em; padding: 0 .5em; border-radius: 4px; background: rgba(128,128,128,.25); text-decoration: none; }
+    #FireFlyConfigPage .ffc-kw .ffc-scope.limited { background: rgba(227,179,65,.25); color: #f0c860; }
+    #FireFlyConfigPage .ffc-kw button { background: none; border: none; color: inherit; cursor: pointer; font-size: .85em; opacity: .8; width: 1.8em; height: 1.8em; border-radius: 50%; }
+    #FireFlyConfigPage .ffc-panel { border: 1px solid rgba(128,128,128,.35); border-radius: 8px; padding: .8em 1em; background: rgba(128,128,128,.08); display: flex; flex-direction: column; gap: .6em; }
+    #FireFlyConfigPage .ffc-scoperow { display: flex; gap: .5em; align-items: center; flex-wrap: wrap; }
+    #FireFlyConfigPage .ffc-scoperow > span:first-child { width: 3.5em; font-size: .88em; opacity: .75; }
+    #FireFlyConfigPage .ffc-note { display: flex; gap: .6em; align-items: flex-start; padding: .55em .8em; border-radius: 8px; font-size: .85em; border: 1px solid rgba(0,164,220,.35); background: rgba(0,164,220,.07); }
+    #FireFlyConfigPage .ffc-note.warn { border-color: rgba(227,179,65,.5); background: rgba(227,179,65,.08); }
+    #FireFlyConfigPage .ffc-note.bad { border-color: rgba(248,81,73,.5); background: rgba(248,81,73,.08); }
+    #FireFlyConfigPage .ffc-tabs { display: inline-flex; gap: .2em; padding: .2em; border: 1px solid rgba(128,128,128,.3); border-radius: 8px; flex-wrap: wrap; }
+    #FireFlyConfigPage .ffc-tabs button { border: none; background: none; color: inherit; border-radius: 6px; padding: .3em .9em; cursor: pointer; font: inherit; font-size: .9em; }
+    #FireFlyConfigPage .ffc-tabs button.on { background: #00a4dc; color: #001018; }
+    #FireFlyConfigPage .ffc-table { border: 1px solid rgba(128,128,128,.25); border-radius: 8px; overflow: hidden; font-size: .88em; }
+    #FireFlyConfigPage .ffc-table > div { display: grid; grid-template-columns: minmax(8em, 12em) minmax(0, 1fr) 6em; gap: .8em; padding: .5em .8em; border-bottom: 1px solid rgba(128,128,128,.18); }
+    #FireFlyConfigPage .ffc-table > div:last-child { border-bottom: none; }
+    #FireFlyConfigPage .ffc-rows > div { display: grid; grid-template-columns: minmax(0, 1fr) 6em 7em; gap: .8em; padding: .35em .8em; border-bottom: 1px solid rgba(128,128,128,.15); font-size: .85em; }
+    #FireFlyConfigPage .ffc-rows > div span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #FireFlyConfigPage .ffc-rows { border: 1px solid rgba(128,128,128,.25); border-radius: 8px; overflow: hidden; }
+    #FireFlyConfigPage .ffc-steps { list-style: none; margin: 0; padding: .6em .9em; border: 1px solid rgba(128,128,128,.25); border-radius: 8px; font-size: .88em; display: flex; flex-direction: column; gap: .2em; }
+    #FireFlyConfigPage .ffc-steps li { display: flex; gap: .6em; }
+    #FireFlyConfigPage .ffc-steps .ok { color: #6fd08c; } #FireFlyConfigPage .ffc-steps .fail { color: #ff8f8f; } #FireFlyConfigPage .ffc-steps .skip, #FireFlyConfigPage .ffc-steps .info { opacity: .75; }
+    #FireFlyConfigPage .ffc-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(10em, 1fr)); gap: .5em; }
+    #FireFlyConfigPage .ffc-facts > div { border: 1px solid rgba(128,128,128,.25); border-radius: 6px; padding: .4em .6em; display: flex; flex-direction: column; font-size: .85em; }
+    #FireFlyConfigPage .ffc-facts > div span:first-child { opacity: .7; font-size: .9em; }
+    #FireFlyConfigPage .ffc-facts code, #FireFlyConfigPage pre.ffc-code { font-family: ui-monospace, Menlo, monospace; }
+    #FireFlyConfigPage pre.ffc-code { margin: 0; background: rgba(0,0,0,.35); border: 1px solid rgba(128,128,128,.25); border-radius: 8px; padding: .8em; font-size: .8em; line-height: 1.5; overflow: auto; max-height: 26em; white-space: pre; }
+    #FireFlyConfigPage .ffc-modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 1000; display: flex; align-items: flex-start; justify-content: center; overflow: auto; padding: 4vh 1em; }
+    #FireFlyConfigPage [hidden] { display: none !important; }
+    #FireFlyConfigPage .ffc-empty { display: flex; flex-direction: column; align-items: flex-start; gap: .6em; padding: 1.2em; border: 1px dashed rgba(128,128,128,.45); border-radius: 10px; }
+    #FireFlyConfigPage .ffc-kw-empty { width: 100%; margin-bottom: .4em; }
+    #FireFlyConfigPage .ffc-dialog { background: #1c1c1c; color: #e8e8e8; border: 1px solid rgba(128,128,128,.4); border-radius: 12px; width: min(920px, 100%); display: flex; flex-direction: column; }
+    #FireFlyConfigPage .ffc-dialog > header { display: flex; justify-content: space-between; align-items: center; padding: .9em 1.2em; border-bottom: 1px solid rgba(128,128,128,.25); }
+    #FireFlyConfigPage .ffc-dialog > header h3 { margin: 0; font-size: 1.15em; }
+    #FireFlyConfigPage .ffc-dialog > .ffc-body { padding: 1em 1.2em 1.2em; display: flex; flex-direction: column; gap: .9em; }
+    #FireFlyConfigPage .ffc-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(14em, 1fr)); gap: .6em; }
+    #FireFlyConfigPage .ffc-methods button { text-align: left; border: 1px solid rgba(128,128,128,.4); background: none; color: inherit; border-radius: 8px; padding: .6em .8em; cursor: pointer; font: inherit; display: flex; flex-direction: column; }
+    #FireFlyConfigPage .ffc-methods button.on { border-color: #00a4dc; background: rgba(0,164,220,.12); }
+    #FireFlyConfigPage .ffc-methods small { opacity: .7; }
+    #FireFlyConfigPage .ffc-field { display: flex; flex-direction: column; gap: .3em; }
+    #FireFlyConfigPage .ffc-field > label { font-size: .9em; }
+    #FireFlyConfigPage .ffc-actions { display: flex; gap: .6em; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+    #FireFlyConfigPage .ffc-map { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1em; }
+    #FireFlyConfigPage .ffc-map .ffc-maprow { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: .6em; align-items: center; margin-bottom: .4em; font-size: .9em; }
+    #FireFlyConfigPage .ffc-savebar { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 1em; flex-wrap: wrap; padding: .8em 0; background: inherit; }
+    @media (max-width: 700px) {
+      #FireFlyConfigPage .ffc-map { grid-template-columns: minmax(0, 1fr); }
+      #FireFlyConfigPage .ffc-detail { padding-left: .8em; }
+      #FireFlyConfigPage .ffc-table > div { grid-template-columns: minmax(0, 1fr); gap: .2em; }
+    }
+  </style>
   <div data-role="content">
     <div class="content-primary">
       <h2>萤火虫 FireFly</h2>
+      <nav class="ffc-nav" aria-label="设置分组">
+        <a href="#" data-goto="ffcDownload">下载与媒体库</a>
+        <a href="#" data-goto="ffcTmdb">元数据（TMDb）</a>
+        <a href="#" data-goto="ffcSites">资源站点</a>
+        <a href="#" data-goto="ffcKeywords">优选关键词</a>
+        <a href="#" data-goto="ffcAdvanced">高级</a>
+      </nav>
       <form id="FireFlyConfigForm">
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="ThunderDownloadDir" label="迅雷下载目录" />
-          <div class="fieldDescription">留空为 ~/Downloads/FireFly。请在迅雷 → 设置 → 下载目录里设成同一个目录，并关闭"新建任务时弹出确认"。</div>
+        <details class="ffc-group" id="ffcDownload">
+          <summary>下载与媒体库<span class="ffc-sum" id="ffcDownloadSum"></span></summary>
+          <div class="inputContainer">
+            <input is="emby-input" type="text" id="ThunderDownloadDir" label="迅雷下载目录" />
+            <div class="fieldDescription">留空为 ~/Downloads/FireFly。请在迅雷 → 设置 → 下载目录里设成同一个目录，并关闭"新建任务时弹出确认"。</div>
+          </div>
+          <div class="inputContainer">
+            <input is="emby-input" type="text" id="MovieLibraryPath" label="电影库目录" />
+            <div class="fieldDescription">留空则自动使用 Jellyfin 第一个"电影"媒体库。最好与下载目录在同一块磁盘，入库时就是瞬间完成的移动。</div>
+          </div>
+          <div class="inputContainer">
+            <input is="emby-input" type="text" id="SeriesLibraryPath" label="剧集库目录" />
+            <div class="fieldDescription">留空则自动使用 Jellyfin 第一个"节目"媒体库。</div>
+          </div>
+        </details>
+
+        <details class="ffc-group" id="ffcTmdb">
+          <summary>元数据（TMDb）<span class="ffc-sum" id="ffcTmdbSum"></span></summary>
+          <div class="selectContainer">
+            <select is="emby-select" id="TmdbApiBaseSelect" label="TMDb 元数据地址"></select>
+            <div class="fieldDescription">插件直连 TMDb，不经过任何中转。默认地址打不开时换一个，或选"自定义"填社区提供的地址。</div>
+          </div>
+          <div class="inputContainer" id="TmdbApiBaseCustom" hidden>
+            <input is="emby-input" type="text" id="TmdbApiBase" label="自定义元数据地址（如 https://api.tmdb.org/3）" />
+          </div>
+          <div class="selectContainer">
+            <select is="emby-select" id="TmdbImageBaseSelect" label="TMDb 图片地址"></select>
+            <div class="fieldDescription">海报由插件取回并缓存到本地，浏览器只从 Jellyfin 加载。</div>
+          </div>
+          <div class="inputContainer" id="TmdbImageBaseCustom" hidden>
+            <input is="emby-input" type="text" id="TmdbImageBase" label="自定义图片地址（如 https://image.tmdb.org/t/p）" />
+          </div>
+          <div class="selectContainer">
+            <select is="emby-select" id="TmdbLanguage" label="TMDb 语言">
+              <option value="zh-CN">简体中文（zh-CN）</option>
+              <option value="zh-TW">繁體中文・台灣（zh-TW）</option>
+              <option value="zh-HK">繁體中文・香港（zh-HK）</option>
+              <option value="en-US">English（en-US）</option>
+              <option value="ja-JP">日本語（ja-JP）</option>
+              <option value="ko-KR">한국어（ko-KR）</option>
+            </select>
+            <div class="fieldDescription">片名、简介、类型等元数据的语言。</div>
+          </div>
+          <div class="inputContainer">
+            <input is="emby-input" type="text" id="TmdbApiKey" label="TMDb API Key" />
+            <div class="fieldDescription">用于"发现"热门榜单，在 themoviedb.org 账号设置里免费申请。只保存在本机。</div>
+          </div>
+          <button is="emby-button" type="button" id="ffClearCache" class="raised" style="margin:0 0 1.8em"><span>清除 TMDb 缓存</span></button>
+          <div class="checkboxContainer">
+            <label>
+              <input is="emby-checkbox" type="checkbox" id="ShowTrailers" />
+              <span>详情页显示 YouTube 预告片</span>
+            </label>
+            <div class="fieldDescription">大陆网络不翻墙时 YouTube 打不开，默认关闭。</div>
+          </div>
+        </details>
+
+        <section class="ffc-group" id="ffcSites">
+          <div class="ffc-head">
+            <div>
+              <h3>资源站点</h3>
+              <div class="ffc-desc">搜索资源时请求下面开启的站点。右边的类型标签表示站点负责哪些资源，搜这类影片时才请求它。拖动 ⠿ 调整顺序：越靠前优先级越高。</div>
+            </div>
+            <button type="button" class="ffc-btn ffc-btn-primary" id="ffcAddSite">＋ 添加站点</button>
+          </div>
+          <div class="ffc-sites" id="ffcSiteList"></div>
+          <div class="ffc-desc" style="margin-top:.6em">内置站点随插件更新；你改过的地方单独保存，没改过的部分会自动跟随新版本。</div>
+        </section>
+
+        <section class="ffc-group" id="ffcKeywords">
+          <div class="ffc-head">
+            <div>
+              <h3>优选关键词</h3>
+              <div class="ffc-desc">先用"片名 + 关键词"搜索，标题里带这些词的资源标为"优选"排在最前。越靠前的词优先级越高，拖动可调整。点一个词可以限定它只用于某些站点或类型。</div>
+            </div>
+            <button type="button" class="ffc-btn ffc-btn-link" id="ffcResetKw">恢复默认</button>
+          </div>
+          <div class="ffc-kws" id="ffcKwList"></div>
+          <div id="ffcKwEditor" style="margin-top:.8em"></div>
+          <div class="ffc-note" id="ffcKwCost" style="margin-top:.8em"></div>
+          <div style="margin-top:1.2em; padding-top:1em; border-top:1px solid rgba(128,128,128,.25)">
+            <div class="ffc-head">
+              <div>
+                <div style="font-weight:500">搜索计划</div>
+                <div class="ffc-desc">按当前设置（含还没保存的改动），搜不同类型的影片时会这样请求。</div>
+              </div>
+              <div class="ffc-tabs" role="tablist" id="ffcPlanTabs"></div>
+            </div>
+            <div id="ffcPlanWarn"></div>
+            <div class="ffc-table" id="ffcPlan"></div>
+            <div class="ffc-desc" id="ffcPlanTotal" style="margin-top:.4em"></div>
+            <div style="display:flex; gap:.5em; flex-wrap:wrap; align-items:center; margin-top:.8em">
+              <label for="ffcTryTitle" class="ffc-desc">试一试</label>
+              <input class="ffc-input" id="ffcTryTitle" placeholder="输入片名" style="width:14em" />
+              <button type="button" class="ffc-btn" id="ffcTry">按这个类型搜索</button>
+              <span class="ffc-desc" id="ffcTryResult"></span>
+            </div>
+          </div>
+        </section>
+
+        <details class="ffc-group" id="ffcAdvanced">
+          <summary>高级<span class="ffc-sum" id="ffcAdvSum"></span></summary>
+          <div id="ffcWarnings"></div>
+          <div class="ffc-desc" style="margin:.6em 0">手写规则文件（可选，改完自动重新加载）：<code id="ffcRulesFile"></code></div>
+          <div style="display:flex; gap:.6em; flex-wrap:wrap; margin-bottom:.8em">
+            <button type="button" class="ffc-btn" id="ffcExport">导出我的改动</button>
+            <button type="button" class="ffc-btn" id="ffcImportAll">导入改动</button>
+            <button type="button" class="ffc-btn ffc-btn-danger" id="ffcResetAll">恢复全部默认（清除本页站点和关键词改动）</button>
+          </div>
+          <div class="ffc-desc" style="margin-bottom:.4em">最终生效的规则（内置 → rules.json → 本页改动 叠加后，只读）</div>
+          <pre class="ffc-code" id="ffcEffective"></pre>
+        </details>
+
+        <div class="ffc-savebar">
+          <span class="ffc-desc" id="ffcDirty">保存后立即生效，不需要重启 Jellyfin</span>
+          <button is="emby-button" type="submit" class="raised button-submit"><span>保存</span></button>
         </div>
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="MovieLibraryPath" label="电影库目录" />
-          <div class="fieldDescription">留空则自动使用 Jellyfin 第一个"电影"媒体库。最好与下载目录在同一块磁盘，入库时就是瞬间完成的移动。</div>
-        </div>
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="SeriesLibraryPath" label="剧集库目录" />
-          <div class="fieldDescription">留空则自动使用 Jellyfin 第一个"节目"媒体库。</div>
-        </div>
-        <div class="selectContainer">
-          <select is="emby-select" id="TmdbApiBaseSelect" label="TMDb 元数据地址"></select>
-          <div class="fieldDescription">插件直连 TMDb，不经过任何中转。默认地址打不开时换一个，或选"自定义"填社区提供的地址。</div>
-        </div>
-        <div class="inputContainer" id="TmdbApiBaseCustom" hidden>
-          <input is="emby-input" type="text" id="TmdbApiBase" label="自定义元数据地址（如 https://api.tmdb.org/3）" />
-        </div>
-        <div class="selectContainer">
-          <select is="emby-select" id="TmdbImageBaseSelect" label="TMDb 图片地址"></select>
-          <div class="fieldDescription">海报由插件取回并缓存到本地，浏览器只从 Jellyfin 加载。</div>
-        </div>
-        <div class="inputContainer" id="TmdbImageBaseCustom" hidden>
-          <input is="emby-input" type="text" id="TmdbImageBase" label="自定义图片地址（如 https://image.tmdb.org/t/p）" />
-        </div>
-        <div class="selectContainer">
-          <select is="emby-select" id="TmdbLanguage" label="TMDb 语言">
-            <option value="zh-CN">简体中文（zh-CN）</option>
-            <option value="zh-TW">繁體中文・台灣（zh-TW）</option>
-            <option value="zh-HK">繁體中文・香港（zh-HK）</option>
-            <option value="en-US">English（en-US）</option>
-            <option value="ja-JP">日本語（ja-JP）</option>
-            <option value="ko-KR">한국어（ko-KR）</option>
-          </select>
-          <div class="fieldDescription">片名、简介、类型等元数据的语言。</div>
-        </div>
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="TmdbApiKey" label="TMDb API Key" />
-          <div class="fieldDescription">用于"发现"热门榜单，在 themoviedb.org 账号设置里免费申请。只保存在本机。</div>
-        </div>
-        <button is="emby-button" type="button" id="ffClearCache" class="raised" style="margin:0 0 1.8em"><span>清除 TMDb 缓存</span></button>
-        <div class="checkboxContainer">
-          <label>
-            <input is="emby-checkbox" type="checkbox" id="ShowTrailers" />
-            <span>详情页显示 YouTube 预告片</span>
-          </label>
-          <div class="fieldDescription">大陆网络不翻墙时 YouTube 打不开，默认关闭。</div>
-        </div>
-        <div class="inputContainer">
-          <textarea is="emby-textarea" id="PublisherKeywords" label="优选关键词（一行一个）" rows="3"></textarea>
-          <div class="fieldDescription">留空使用内置默认，一般无需填写。一行只放一个词。</div>
-        </div>
-        <button is="emby-button" type="submit" class="raised button-submit block"><span>保存</span></button>
       </form>
     </div>
   </div>
+  <div class="ffc-modal" id="ffcModal" hidden></div>
   <script type="text/javascript">
     (function () {
       var pluginId = '4f1d2c8e-9b7a-4e35-8c61-f1ae0f17f1f1';
-      var fields = ['ThunderDownloadDir', 'MovieLibraryPath', 'SeriesLibraryPath', 'TmdbApiKey', 'TmdbLanguage', 'PublisherKeywords'];
+      var fields = ['ThunderDownloadDir', 'MovieLibraryPath', 'SeriesLibraryPath', 'TmdbApiKey', 'TmdbLanguage'];
       var checks = ['ShowTrailers'];
       // 下拉选的地址：候选来自规则文件，第一项是默认；选"自定义"时显示输入框
       var bases = [{ key: 'TmdbApiBase', options: 'tmdbApiBases' }, { key: 'TmdbImageBase', options: 'tmdbImageBases' }];
       var CUSTOM = 'custom';
+      var MAX_KEYWORDS = 5;
       var config = null;
       var page = document.querySelector('#FireFlyConfigPage');
+      var $ = function (sel) { return page.querySelector(sel); };
+
+      // 站点和关键词编辑器的状态：lower = 内置 + rules.json，overlay = 本页的改动（保存进 RulesOverlay）
+      var ed = { lower: { sources: [], keywords: [] }, overlay: {}, categories: [], health: {}, sample: '流浪地球' };
+      var ui = { open: null, editingKw: null, planTab: 'movie', dirty: false };
 
       function esc(text) {
-        return String(text).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; });
+        return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; });
       }
+      function api(method, path, body) {
+        return ApiClient.ajax({ url: ApiClient.getUrl(path), type: method, data: body ? JSON.stringify(body) : undefined, contentType: body ? 'application/json' : undefined, dataType: 'json' });
+      }
+      function el(tag, attrs, children) {
+        var node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+          var v = attrs[k];
+          if (v == null || v === false) return;
+          if (k === 'text') node.textContent = v;
+          else if (k === 'html') node.innerHTML = v;
+          else if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), v);
+          else node.setAttribute(k, v === true ? '' : v);
+        });
+        (children || []).forEach(function (c) { if (c) node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+        return node;
+      }
+      function same(a, b) { return String(a).toLowerCase() === String(b).toLowerCase(); }
+      function has(list, v) { return (list || []).some(function (x) { return same(x, v); }); }
+      function size(bytes) {
+        if (!bytes) return '';
+        var units = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0, n = bytes;
+        while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+        return n.toFixed(i >= 3 ? 1 : 0) + ' ' + units[i];
+      }
+      function date(d) { return d ? String(d).slice(0, 10) : ''; }
+      function catLabel(key) { var c = ed.categories.find(function (x) { return x.key === key; }); return c ? c.label : key; }
+      function catKeys() { return ed.categories.map(function (c) { return c.key; }); }
+      function host(url) { try { return new URL(url).host; } catch (e) { return url; } }
+      function markDirty() { ui.dirty = true; $('#ffcDirty').textContent = '有未保存的改动 · 保存后立即生效，不需要重启 Jellyfin'; }
+
+      // ---------- 叠加：和服务端 RulesLoader 的合并方式一致（站点按 name、关键词按 word） ----------
+      function ovSources() { return ed.overlay.sources || (ed.overlay.sources = []); }
+      function ovSource(name, create) {
+        var list = ovSources();
+        var s = list.find(function (x) { return same(x.name, name); });
+        if (!s && create) { s = { name: name }; list.push(s); }
+        return s;
+      }
+      function ovKeywords() { return ed.overlay.keywords || (ed.overlay.keywords = {}); }
+      function lowerSource(name) { return ed.lower.sources.find(function (x) { return same(x.name, name); }); }
+
+      function sortByOrder(items, key, order) {
+        if (!order || !order.length) return items;
+        return items.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) {
+          var ra = order.findIndex(function (o) { return same(o, key(a.x)); }), rb = order.findIndex(function (o) { return same(o, key(b.x)); });
+          ra = ra < 0 ? 1e9 : ra; rb = rb < 0 ? 1e9 : rb;
+          return ra - rb || a.i - b.i;
+        }).map(function (y) { return y.x; });
+      }
+
+      function sites() {
+        var list = ed.lower.sources.map(function (s) {
+          var o = ovSource(s.name);
+          return {
+            name: s.name, kind: (o && o.kind) || s.kind, builtin: true,
+            endpoints: (o && o.endpoints) || s.endpoints || [],
+            enabled: o && o.enabled != null ? o.enabled : s.enabled !== false,
+            types: (o && o.types) || s.types || [],
+            modified: !!o && Object.keys(o).length > 1,
+          };
+        });
+        ovSources().forEach(function (o) {
+          if (lowerSource(o.name)) return;
+          list.push({ name: o.name, kind: o.kind, builtin: false, endpoints: o.endpoints || [], enabled: o.enabled !== false, types: o.types || [], modified: false });
+        });
+        return sortByOrder(list, function (s) { return s.name; }, ed.overlay.sourceOrder);
+      }
+
+      // 关键词：全部（含停用的内置词），按优先级排好
+      function keywords() {
+        var ov = ed.overlay.keywords || {};
+        var items = ed.lower.keywords.map(function (k) { return { word: k.word, sources: k.sources || [], types: k.types || [], builtin: true }; });
+        (ov.items || []).forEach(function (raw) {
+          var k = typeof raw === 'string' ? { word: raw } : raw;
+          var existing = items.find(function (x) { return same(x.word, k.word); });
+          if (existing) {
+            if (k.sources) existing.sources = k.sources;
+            if (k.types) existing.types = k.types;
+          } else {
+            items.push({ word: k.word, sources: k.sources || [], types: k.types || [], builtin: false });
+          }
+        });
+        items.forEach(function (k) { k.off = has(ov.disable, k.word); });
+        return sortByOrder(items, function (k) { return k.word; }, ov.order);
+      }
+      function activeKeywords() { return keywords().filter(function (k) { return !k.off; }); }
+      function applies(k, site, cat) {
+        return (!k.sources.length || has(k.sources, site)) && (!cat || !k.types.length || has(k.types, cat));
+      }
+
+      // 和服务端 SearchPlanner 一致：只请求负责这个类型的站点，没有就用全部；每个站点只用对它生效的词
+      function plan(cat) {
+        var enabled = sites().filter(function (s) { return s.enabled; });
+        var chosen = enabled.filter(function (s) { return !s.types.length || has(s.types, cat); });
+        var none = !chosen.length && enabled.length > 0;
+        if (none) chosen = enabled;
+        var kws = activeKeywords();
+        return {
+          none: none,
+          sources: chosen.map(function (s) { return { site: s, words: kws.filter(function (k) { return applies(k, s.name, cat); }).map(function (k) { return k.word; }) }; }),
+        };
+      }
+
+      // 去掉空数组 / 空对象，保存成紧凑的覆盖片段
+      function cleanOverlay() {
+        var o = JSON.parse(JSON.stringify(ed.overlay));
+        if (o.sources) {
+          o.sources = o.sources.filter(function (s) { return Object.keys(s).length > 1 || !lowerSource(s.name); });
+          if (!o.sources.length) delete o.sources;
+        }
+        if (o.sourceOrder && !o.sourceOrder.length) delete o.sourceOrder;
+        if (o.keywords) {
+          ['items', 'disable', 'order'].forEach(function (k) { if (o.keywords[k] && !o.keywords[k].length) delete o.keywords[k]; });
+          if (!Object.keys(o.keywords).length) delete o.keywords;
+        }
+        return Object.keys(o).length ? JSON.stringify(o) : '';
+      }
+
+      // ---------- 站点列表 ----------
+      function healthOf(s) {
+        var h = ed.health[s.name];
+        if (!s.enabled) return { cls: '', text: '已停用' + (h ? ' · ' + healthText(h) : '') };
+        if (!h) return { cls: '', text: '还没有请求过' };
+        if (!h.ok) return { cls: 'bad', text: healthText(h) };
+        return { cls: h.count ? 'ok' : 'warn', text: healthText(h) };
+      }
+      function healthText(h) {
+        return h.ok ? '上次可用 · ' + (h.ms / 1000).toFixed(1) + ' 秒 · ' + h.count + ' 条' : '上次失败：' + (h.error || '未知原因');
+      }
+
+      var dragSite = null;
+      function renderSites() {
+        var box = $('#ffcSiteList');
+        box.innerHTML = '';
+        var list = sites();
+        if (!list.length) {
+          box.appendChild(el('div', { class: 'ffc-empty' }, [
+            el('strong', { text: '还没有资源站点' }),
+            el('div', { class: 'ffc-desc', text: '萤火虫不内置任何资源站，添加至少一个站点后才能在详情页获取资源。可以粘贴一次在站点上搜索的网页地址让插件自动识别，也可以接入 Jackett / Prowlarr，或粘贴别人分享的规则片段。' }),
+            el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '添加第一个站点', onclick: function () { $('#ffcAddSite').click(); } }),
+          ]));
+        }
+        list.forEach(function (s) {
+          var health = healthOf(s);
+          var open = ui.open === s.name;
+          var row = el('div', { class: 'ffc-site', 'data-name': s.name });
+          row.addEventListener('dragover', function (e) { if (dragSite && dragSite !== s.name) { e.preventDefault(); row.classList.add('ffc-drop'); } });
+          row.addEventListener('dragleave', function () { row.classList.remove('ffc-drop'); });
+          row.addEventListener('drop', function (e) {
+            e.preventDefault(); row.classList.remove('ffc-drop');
+            if (!dragSite || dragSite === s.name) return;
+            var names = list.map(function (x) { return x.name; }).filter(function (n) { return n !== dragSite; });
+            names.splice(names.indexOf(s.name), 0, dragSite);
+            ed.overlay.sourceOrder = names; dragSite = null; markDirty(); renderAll();
+          });
+          var grip = el('span', { class: 'ffc-grip', draggable: 'true', title: '拖动调整顺序', 'aria-hidden': 'true', text: '⠿' });
+          grip.addEventListener('dragstart', function (e) { dragSite = s.name; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', s.name); });
+          grip.addEventListener('dragend', function () { dragSite = null; });
+          var chips = el('div', { class: 'ffc-chips', role: 'group', 'aria-label': s.name + ' 负责的类型' }, catKeys().map(function (key) {
+            var on = !s.types.length || has(s.types, key);
+            return el('button', { type: 'button', class: 'ffc-chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', text: catLabel(key), onclick: function () { toggleType(s, key); } });
+          }));
+          row.appendChild(el('div', { class: 'ffc-row' }, [
+            grip,
+            el('span', { class: 'ffc-dot ' + health.cls, 'aria-hidden': 'true' }),
+            el('button', { type: 'button', class: 'ffc-name', 'aria-expanded': open ? 'true' : 'false', text: (open ? '▾ ' : '▸ ') + s.name, onclick: function () { ui.open = open ? null : s.name; renderSites(); } }),
+            el('span', { class: 'ffc-badge', text: s.kind === 'torznab' ? 'Torznab' : s.builtin ? (s.modified ? '内置 · 已改' : '内置') : '自定义' }),
+            el('span', { class: 'ffc-status ' + (health.cls === 'bad' ? 'bad' : ''), text: health.text }),
+            chips,
+            el('button', { type: 'button', class: 'ffc-btn', text: '测试', onclick: function () { testSite(s); } }),
+            el('button', { type: 'button', class: 'ffc-switch' + (s.enabled ? ' on' : ''), 'aria-pressed': s.enabled ? 'true' : 'false', 'aria-label': '启用 ' + s.name, onclick: function () { ovSource(s.name, true).enabled = !s.enabled; markDirty(); renderAll(); } }),
+          ]));
+          if (open) row.appendChild(siteDetail(s));
+          box.appendChild(row);
+        });
+      }
+
+      function toggleType(s, key) {
+        var all = catKeys();
+        var current = s.types.length ? s.types.slice() : all.slice();
+        if (has(current, key)) {
+          if (current.length === 1) { Dashboard.alert('至少保留一个类型。不想用这个站点时，关掉右边的开关。'); return; }
+          current = current.filter(function (x) { return !same(x, key); });
+        } else {
+          current.push(key);
+        }
+        ovSource(s.name, true).types = current.length >= all.length ? [] : all.filter(function (k) { return has(current, k); });
+        markDirty(); renderAll();
+      }
+
+      function siteDetail(s) {
+        var box = el('div', { class: 'ffc-detail' });
+        box.appendChild(el('div', { class: 'ffc-desc', text: s.kind === 'torznab' ? 'Torznab 地址（依次尝试）' : '地址（依次尝试，上次成功的自动排到最前）' }));
+        var endpoints = s.endpoints.length ? s.endpoints.slice() : [''];
+        function save() {
+          var values = Array.prototype.map.call(box.querySelectorAll('.ffc-endpoint input'), function (i) { return i.value.trim(); }).filter(Boolean);
+          ovSource(s.name, true).endpoints = values; markDirty();
+        }
+        endpoints.forEach(function (url, i) {
+          box.appendChild(el('div', { class: 'ffc-endpoint' }, [
+            el('input', { class: 'ffc-input', value: url, 'aria-label': '站点地址', onchange: save }),
+            el('button', { type: 'button', class: 'ffc-btn ffc-icon', 'aria-label': '删除这个地址', text: '✕', onclick: function () { endpoints.splice(i, 1); ovSource(s.name, true).endpoints = endpoints.filter(Boolean); markDirty(); renderSites(); } }),
+          ]));
+        });
+        var actions = el('div', { style: 'display:flex; gap:.6em; flex-wrap:wrap' }, [
+          el('button', { type: 'button', class: 'ffc-btn', text: '＋ 添加备用地址', onclick: function () { save(); ovSource(s.name, true).endpoints = (ovSource(s.name).endpoints || s.endpoints).concat(['']); renderSites(); } }),
+        ]);
+        if (s.builtin && s.modified) actions.appendChild(el('button', { type: 'button', class: 'ffc-btn ffc-btn-link', text: '恢复默认', onclick: function () { removeOverlaySource(s.name); markDirty(); renderAll(); } }));
+        if (!s.builtin) actions.appendChild(el('button', { type: 'button', class: 'ffc-btn ffc-btn-danger', text: '删除站点', onclick: function () {
+          if (!confirm('删除站点 ' + s.name + '？')) return;
+          removeOverlaySource(s.name);
+          if (ed.overlay.sourceOrder) ed.overlay.sourceOrder = ed.overlay.sourceOrder.filter(function (n) { return !same(n, s.name); });
+          (ovKeywords().items || []).forEach(function (k) { if (k.sources) k.sources = k.sources.filter(function (n) { return !same(n, s.name); }); });
+          ui.open = null; markDirty(); renderAll();
+        } }));
+        box.appendChild(actions);
+
+        // 本站关键词：和下面"优选关键词"是同一份数据，这里只显示对本站生效的
+        var mine = activeKeywords().filter(function (k) { return applies(k, s.name, null); });
+        var kwBox = el('div', { class: 'ffc-kws' }, mine.map(function (k) {
+          return el('span', { class: 'ffc-badge', text: k.word + (k.sources.length ? ' · 本站' : ' · 通用') + (k.types.length ? ' · ' + k.types.map(catLabel).join('、') : '') });
+        }));
+        var input = el('input', { class: 'ffc-input', placeholder: '添加本站专用词', style: 'width:11em', 'aria-label': '本站专用关键词' });
+        kwBox.appendChild(input);
+        kwBox.appendChild(el('button', { type: 'button', class: 'ffc-btn', text: '＋', 'aria-label': '添加本站专用词', onclick: function () { addKeyword(input.value, [s.name]); } }));
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addKeyword(input.value, [s.name]); } });
+        box.appendChild(el('div', { class: 'ffc-desc', text: '本站关键词（和"优选关键词"是同一份数据，这里只显示对本站生效的）' }));
+        box.appendChild(kwBox);
+        return box;
+      }
+
+      function removeOverlaySource(name) { if (ed.overlay.sources) ed.overlay.sources = ed.overlay.sources.filter(function (x) { return !same(x.name, name); }); }
+
+      // ---------- 测试站点 ----------
+      function testSite(s) {
+        var body = el('div', { class: 'ffc-body' });
+        var input = el('input', { class: 'ffc-input', value: ed.sample, style: 'flex:1', 'aria-label': '测试片名' });
+        var result = el('div');
+        function run() {
+          result.innerHTML = '<div class="ffc-desc">正在搜索…</div>';
+          api('POST', 'FireFly/sources/test', { name: s.name, keyword: input.value, overlay: cleanOverlay() }).then(function (r) {
+            result.innerHTML = '';
+            result.appendChild(testResult(r));
+            if (r.ok != null) { ed.health[s.name] = { ok: r.ok, ms: r.ms || 0, count: r.count || 0, error: r.error }; renderSites(); }
+          }, function () { result.innerHTML = '<div class="ffc-note bad">请求失败</div>'; });
+        }
+        body.appendChild(el('div', { style: 'display:flex; gap:.5em' }, [input, el('button', { type: 'button', class: 'ffc-btn', text: '重新测试', onclick: run })]));
+        body.appendChild(result);
+        openModal('测试 ' + s.name, body);
+        run();
+      }
+
+      function testResult(r) {
+        var box = el('div', { style: 'display:flex; flex-direction:column; gap:.7em' });
+        if (r.ok) {
+          box.appendChild(el('div', { class: 'ffc-note', text: '✓ 可用 · ' + (r.ms / 1000).toFixed(1) + ' 秒 · ' + r.count + ' 条' }));
+          box.appendChild(rows(r.rows));
+        } else {
+          box.appendChild(el('div', { class: 'ffc-note bad', text: '✕ ' + (r.error || '搜索失败') }));
+          box.appendChild(el('div', { class: 'ffc-desc', html: '可能的原因：<br>· 站点换了域名：到站点的发布页找新地址，填到"地址"里<br>· 站点需要先在浏览器里验证（人机验证、登录），插件无法通过<br>· 站点改了返回格式：用"添加站点 → 粘贴一次搜索的地址"重新识别' }));
+        }
+        return box;
+      }
+
+      function rows(list) {
+        return el('div', { class: 'ffc-rows' }, (list || []).map(function (x) {
+          return el('div', {}, [el('span', { text: x.name, title: x.name }), el('span', { text: size(x.size) }), el('span', { text: date(x.date) })]);
+        }));
+      }
+
+      // ---------- 关键词 ----------
+      var dragKw = null;
+      function renderKeywords() {
+        var box = $('#ffcKwList');
+        box.innerHTML = '';
+        var list = keywords();
+        if (!list.length) box.appendChild(el('div', { class: 'ffc-desc ffc-kw-empty', text: '还没有优选关键词。可以填你信任的发布组或站点名，搜索时优先找带这些词的资源；不填也能正常搜索。' }));
+        var rank = 0;
+        list.forEach(function (k) {
+          if (!k.off) rank++;
+          var limited = k.sources.length || k.types.length;
+          var scope = limited ? '仅 ' + [k.sources.join('、'), k.types.map(catLabel).join('、')].filter(Boolean).join(' · ') : '全部';
+          var chip = el('span', { class: 'ffc-kw' + (k.off ? ' off' : '') + (ui.editingKw === k.word ? ' editing' : ''), draggable: k.off ? null : 'true' }, [
+            el('span', { class: 'ffc-rank', text: k.off ? '—' : String(rank) }),
+            el('span', { text: k.word }),
+            k.builtin ? el('span', { class: 'ffc-scope', text: '内置' }) : null,
+            el('span', { class: 'ffc-scope' + (limited ? ' limited' : ''), text: scope }),
+            el('button', { type: 'button', 'aria-label': '设置适用范围', title: '设置适用范围', text: '⚙', onclick: function () { ui.editingKw = ui.editingKw === k.word ? null : k.word; renderKeywords(); } }),
+            el('button', { type: 'button', 'aria-label': k.builtin ? (k.off ? '重新启用' : '停用这个内置词') : '删除', title: k.builtin ? (k.off ? '重新启用' : '停用这个内置词') : '删除', text: k.builtin ? (k.off ? '↺' : '⊘') : '✕', onclick: function () { toggleKeyword(k); } }),
+          ]);
+          if (!k.off) {
+            chip.addEventListener('dragstart', function (e) { dragKw = k.word; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', k.word); });
+            chip.addEventListener('dragend', function () { dragKw = null; });
+            chip.addEventListener('dragover', function (e) { if (dragKw && dragKw !== k.word) { e.preventDefault(); chip.classList.add('ffc-drop'); } });
+            chip.addEventListener('dragleave', function () { chip.classList.remove('ffc-drop'); });
+            chip.addEventListener('drop', function (e) {
+              e.preventDefault(); chip.classList.remove('ffc-drop');
+              if (!dragKw || dragKw === k.word) return;
+              var words = list.map(function (x) { return x.word; }).filter(function (w) { return w !== dragKw; });
+              words.splice(words.indexOf(k.word), 0, dragKw);
+              ovKeywords().order = words; dragKw = null; markDirty(); renderAll();
+            });
+          }
+          box.appendChild(chip);
+        });
+        var input = el('input', { class: 'ffc-input', placeholder: '输入发布者或字幕组名', style: 'width:13em; border-radius:999px', 'aria-label': '新关键词' });
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addKeyword(input.value, []); } });
+        box.appendChild(input);
+        box.appendChild(el('button', { type: 'button', class: 'ffc-btn', text: '＋ 添加', onclick: function () { addKeyword(input.value, []); } }));
+        renderKeywordEditor();
+        renderCost();
+      }
+
+      function toggleKeyword(k) {
+        var kw = ovKeywords();
+        if (k.builtin) {
+          kw.disable = (kw.disable || []).filter(function (w) { return !same(w, k.word); });
+          if (!k.off) kw.disable.push(k.word);
+        } else {
+          kw.items = (kw.items || []).filter(function (x) { return !same(typeof x === 'string' ? x : x.word, k.word); });
+          if (kw.order) kw.order = kw.order.filter(function (w) { return !same(w, k.word); });
+          if (ui.editingKw === k.word) ui.editingKw = null;
+        }
+        markDirty(); renderAll();
+      }
+
+      function addKeyword(word, sourcesScope) {
+        word = (word || '').trim();
+        if (!word) return;
+        if (keywords().some(function (k) { return same(k.word, word); })) { Dashboard.alert('已经有"' + word + '"了'); return; }
+        var kw = ovKeywords();
+        kw.items = (kw.items || []).concat([{ word: word, sources: sourcesScope, types: [] }]);
+        if (kw.order && kw.order.length) kw.order = kw.order.concat([word]);
+        markDirty(); renderAll();
+      }
+
+      function setScope(word, patch) {
+        var kw = ovKeywords();
+        kw.items = kw.items || [];
+        var current = keywords().find(function (k) { return same(k.word, word); });
+        var item = kw.items.find(function (x) { return same(typeof x === 'string' ? x : x.word, word); });
+        if (!item || typeof item === 'string') {
+          kw.items = kw.items.filter(function (x) { return x !== item; });
+          item = { word: word, sources: current.sources.slice(), types: current.types.slice() };
+          kw.items.push(item);
+        }
+        Object.assign(item, patch);
+        markDirty(); renderAll();
+      }
+
+      function renderKeywordEditor() {
+        var box = $('#ffcKwEditor');
+        box.innerHTML = '';
+        var k = keywords().find(function (x) { return x.word === ui.editingKw; });
+        if (!k) return;
+        function opt(label, on, click) { return el('button', { type: 'button', class: 'ffc-chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', text: label, onclick: click }); }
+        function toggle(list, v) { return has(list, v) ? list.filter(function (x) { return !same(x, v); }) : list.concat([v]); }
+        box.appendChild(el('div', { class: 'ffc-panel' }, [
+          el('div', { style: 'display:flex; justify-content:space-between; align-items:center' }, [
+            el('strong', { text: '"' + k.word + '" 的适用范围' }),
+            el('button', { type: 'button', class: 'ffc-btn', text: '完成', onclick: function () { ui.editingKw = null; renderKeywords(); } }),
+          ]),
+          el('div', { class: 'ffc-scoperow' }, [el('span', { text: '站点' }), opt('全部站点', !k.sources.length, function () { setScope(k.word, { sources: [] }); })]
+            .concat(sites().map(function (s) { return opt(s.name, has(k.sources, s.name), function () { setScope(k.word, { sources: toggle(k.sources, s.name) }); }); }))),
+          el('div', { class: 'ffc-scoperow' }, [el('span', { text: '类型' }), opt('全部类型', !k.types.length, function () { setScope(k.word, { types: [] }); })]
+            .concat(catKeys().map(function (c) { return opt(catLabel(c), has(k.types, c), function () { setScope(k.word, { types: toggle(k.types, c) }); }); }))),
+        ]));
+      }
+
+      function renderCost() {
+        var active = activeKeywords().length;
+        var heavy = active > MAX_KEYWORDS;
+        var note = $('#ffcKwCost');
+        note.className = 'ffc-note' + (heavy ? ' warn' : '');
+        note.textContent = '当前 ' + active + ' 个词。每个站点每个词搜一轮（剧集每个词两种季号写法各一轮）。' +
+          (heavy ? '词太多容易被站点限流，建议用"适用范围"把词限定到相关的站点或类型。' : '词越多越全，也越慢；建议每个站点不超过 ' + MAX_KEYWORDS + ' 个。');
+      }
+
+      // ---------- 搜索计划 ----------
+      function renderPlan() {
+        var tabs = $('#ffcPlanTabs');
+        tabs.innerHTML = '';
+        if (catKeys().indexOf(ui.planTab) < 0) ui.planTab = catKeys()[0] || 'movie';
+        ed.categories.forEach(function (c) {
+          tabs.appendChild(el('button', { type: 'button', role: 'tab', class: ui.planTab === c.key ? 'on' : '', 'aria-selected': ui.planTab === c.key ? 'true' : 'false', text: c.label, onclick: function () { ui.planTab = c.key; renderPlan(); } }));
+        });
+        var p = plan(ui.planTab);
+        var series = ui.planTab !== 'movie';
+        var warn = $('#ffcPlanWarn');
+        warn.innerHTML = '';
+        if (p.none) warn.appendChild(el('div', { class: 'ffc-note bad', style: 'margin-bottom:.6em', text: '没有站点负责"' + catLabel(ui.planTab) + '"：搜索时将改用全部开启的站点。' }));
+        var table = $('#ffcPlan');
+        table.innerHTML = '';
+        var total = 0;
+        if (!p.sources.length) table.appendChild(el('div', {}, [el('span', { class: 'ffc-desc', text: '没有开启的站点' })]));
+        p.sources.forEach(function (sp) {
+          var n = sp.words.length * (series ? 2 : 1);
+          total += n;
+          table.appendChild(el('div', {}, [
+            el('strong', { text: sp.site.name }),
+            el('span', { class: sp.words.length ? '' : 'ffc-desc', text: sp.words.length ? '片名' + (series ? '（第N季 / SNN）' : '') + ' + ' + sp.words.join(' / ') : '没有生效的关键词：跳过优选，只参与降级搜索' }),
+            el('span', { class: 'ffc-desc', text: n ? n + ' 次' : '—' }),
+          ]));
+        });
+        $('#ffcPlanTotal').textContent = '优选阶段约 ' + total + ' 次请求；结果不够时再按站点各做一次不带关键词的降级搜索。';
+        $('#ffcTry').textContent = '按"' + catLabel(ui.planTab) + '"搜索';
+      }
+
+      // ---------- 高级 ----------
+      function renderAdvanced(effective, warnings) {
+        if (effective != null) $('#ffcEffective').textContent = effective;
+        var box = $('#ffcWarnings');
+        if (warnings) {
+          box.innerHTML = '';
+          if (warnings.length) warnings.forEach(function (w) { box.appendChild(el('div', { class: 'ffc-note warn', style: 'margin-bottom:.4em', text: w })); });
+          else box.appendChild(el('div', { class: 'ffc-note', text: '规则正常' }));
+          $('#ffcAdvSum').textContent = warnings.length ? warnings.length + ' 条提示' : '规则正常';
+        }
+      }
+
+      function renderAll() {
+        renderSites();
+        renderKeywords();
+        renderPlan();
+      }
+
+      // ---------- 弹窗 ----------
+      function openModal(title, body) {
+        var modal = $('#ffcModal');
+        modal.innerHTML = '';
+        var dialog = el('div', { class: 'ffc-dialog', role: 'dialog', 'aria-label': title }, [
+          el('header', {}, [el('h3', { text: title }), el('button', { type: 'button', class: 'ffc-btn ffc-icon', 'aria-label': '关闭', text: '✕', onclick: closeModal })]),
+          body,
+        ]);
+        modal.appendChild(dialog);
+        modal.hidden = false;
+      }
+      function closeModal() { var m = $('#ffcModal'); m.hidden = true; m.innerHTML = ''; }
+      $('#ffcModal').addEventListener('click', function (e) { if (e.target.id === 'ffcModal') closeModal(); });
+
+      // ---------- 添加站点 ----------
+      function uniqueName(name) {
+        var n = name, i = 2;
+        while (sites().some(function (s) { return same(s.name, n); })) n = name + ' (' + (i++) + ')';
+        return n;
+      }
+
+      function addSite(rule, replace) {
+        var existing = sites().find(function (s) { return same(s.name, rule.name); });
+        if (existing && !replace) rule.name = uniqueName(rule.name);
+        if (existing && replace) removeOverlaySource(rule.name);
+        ovSources().push(rule);
+        ui.open = rule.name;
+        markDirty(); closeModal(); renderAll();
+        $('#ffcSites').scrollIntoView({ behavior: 'smooth' });
+      }
+
+      function typeChips(selected) {
+        var box = el('div', { class: 'ffc-chips' });
+        function draw() {
+          box.innerHTML = '';
+          catKeys().forEach(function (key) {
+            var on = !selected.length || has(selected, key);
+            box.appendChild(el('button', { type: 'button', class: 'ffc-chip' + (on ? ' on' : ''), text: catLabel(key), onclick: function () {
+              var all = catKeys(), cur = selected.length ? selected.slice() : all.slice();
+              cur = has(cur, key) ? cur.filter(function (x) { return !same(x, key); }) : cur.concat([key]);
+              if (!cur.length) return;
+              selected.length = 0;
+              if (cur.length < all.length) all.forEach(function (k) { if (has(cur, k)) selected.push(k); });
+              draw();
+            } }));
+          });
+        }
+        draw();
+        return box;
+      }
+
+      function addSiteDialog(method) {
+        var body = el('div', { class: 'ffc-body' });
+        var methods = [
+          { id: 'A', title: '粘贴一次搜索的地址', sub: '推荐 · 自动识别，大多数人用这个' },
+          { id: 'B', title: '连接 Jackett / Prowlarr', sub: '一次接入几百个站点（Torznab）' },
+          { id: 'C', title: '粘贴规则片段', sub: '导入别人分享的站点' },
+        ];
+        var current = method || 'A';
+        var pane = el('div');
+        var tabs = el('div', { class: 'ffc-methods', role: 'tablist' });
+        function draw() {
+          tabs.innerHTML = '';
+          methods.forEach(function (m) {
+            tabs.appendChild(el('button', { type: 'button', role: 'tab', class: current === m.id ? 'on' : '', 'aria-selected': current === m.id ? 'true' : 'false', onclick: function () { current = m.id; draw(); } }, [el('span', { text: m.title }), el('small', { text: m.sub })]));
+          });
+          pane.innerHTML = '';
+          pane.appendChild(current === 'A' ? paneDetect() : current === 'B' ? paneTorznab() : paneSnippet());
+        }
+        body.appendChild(tabs);
+        body.appendChild(pane);
+        openModal('添加站点', body);
+        draw();
+      }
+
+      // A：粘贴搜索地址，插件自动识别
+      function paneDetect() {
+        var box = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
+        var input = el('input', { class: 'ffc-input', id: 'ffcDetectUrl', placeholder: 'https://资源站/search?keyword=' + ed.sample, style: 'flex:1' });
+        var out = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
+        function run() {
+          if (!input.value.trim()) return;
+          out.innerHTML = '<div class="ffc-desc">正在识别：认识这个站吗… 正在找接口… 正在读取结果…（最多约半分钟）</div>';
+          api('POST', 'FireFly/sources/detect', { url: input.value.trim(), sample: ed.sample }).then(function (r) { out.innerHTML = ''; out.appendChild(detectResult(r)); }, function () { out.innerHTML = '<div class="ffc-note bad">识别请求失败</div>'; });
+        }
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+        box.appendChild(el('div', { class: 'ffc-field' }, [
+          el('label', { for: 'ffcDetectUrl', html: '告诉我们这个站怎么搜：在站内搜一次<b>"' + esc(ed.sample) + '"</b>，把浏览器地址栏的地址粘贴到这里' }),
+          el('div', { style: 'display:flex; gap:.5em' }, [input, el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '识别', onclick: run })]),
+          el('div', { class: 'ffc-desc', text: '这只是一个样例：插件从中学会这个站怎么搜，之后所有影片都会通过它找资源。' }),
+        ]));
+        box.appendChild(out);
+        return box;
+      }
+
+      function detectResult(r) {
+        var box = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
+        box.appendChild(el('ol', { class: 'ffc-steps', 'aria-label': '识别过程' }, (r.steps || []).map(function (s) {
+          var icon = s.state === 'ok' ? '✓' : s.state === 'fail' ? '✕' : s.state === 'info' ? 'ⓘ' : '–';
+          return el('li', {}, [el('span', { class: s.state, text: icon }), el('span', { style: 'min-width:9em', text: s.label }), el('span', { class: s.state, text: s.detail })]);
+        })));
+        if (r.known) {
+          box.appendChild(el('div', { class: 'ffc-note', text: '这个站点已经在列表里了（' + r.rule.name + '）。换了域名的话，在站点列表里展开它改地址即可。' }));
+          return box;
+        }
+        if (r.rule) {
+          var rule = r.rule;
+          rule.types = [];
+          box.appendChild(el('div', { class: 'ffc-facts' }, [
+            fact('接口地址', host(r.apiUrl) + new URL(r.apiUrl).pathname),
+            fact('关键词参数', rule.request.keywordParam),
+            fact('分页', rule.maxPages > 1 ? rule.request.limitParam + ' · ' + rule.request.offsetParam : '只取一页'),
+            fact('资源列表', rule.response.itemsPath),
+            fact('还有下一页', rule.response.hasMorePath || '—'),
+          ]));
+          box.appendChild(rows(r.preview));
+          box.appendChild(siteForm(rule, function () { mappingDialog(r, rule); }));
+        } else if (r.apiUrl) {
+          box.appendChild(el('div', { class: 'ffc-actions' }, [el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '手动调整字段', onclick: function () { mappingDialog(r, null); } })]));
+        }
+        return box;
+      }
+
+      function fact(label, value) { return el('div', {}, [el('span', { text: label }), el('code', { text: value || '—' })]); }
+
+      // 站点名 + 负责类型 + [不对，手动调整] [对，添加]
+      function siteForm(rule, adjust) {
+        var name = el('input', { class: 'ffc-input', value: rule.name, style: 'width:14em', 'aria-label': '站点名' });
+        var existing = function () { return sites().find(function (s) { return same(s.name, name.value.trim()); }); };
+        var clash = el('div');
+        function drawClash() {
+          clash.innerHTML = '';
+          if (existing()) clash.appendChild(el('div', { class: 'ffc-note warn', text: '已有同名站点"' + name.value.trim() + '"：选"替换"会用新设置覆盖它，选"另存为新站点"会自动改名。' }));
+        }
+        name.addEventListener('input', drawClash);
+        drawClash();
+        var box = el('div', { style: 'display:flex; flex-direction:column; gap:.7em' }, [
+          el('div', { style: 'display:flex; gap:.8em; align-items:center; flex-wrap:wrap' }, [el('label', { text: '站点名' }), name, el('span', { class: 'ffc-desc', text: '负责的类型' }), typeChips(rule.types)]),
+          clash,
+        ]);
+        var actions = el('div', { class: 'ffc-actions' });
+        if (adjust) actions.appendChild(el('button', { type: 'button', class: 'ffc-btn', text: '不对，手动调整', onclick: adjust }));
+        actions.appendChild(el('button', { type: 'button', class: 'ffc-btn', text: '另存为新站点', onclick: function () { rule.name = name.value.trim() || rule.name; addSite(rule, false); } }));
+        actions.appendChild(el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '对，添加', onclick: function () { rule.name = name.value.trim() || rule.name; addSite(rule, true); } }));
+        box.appendChild(actions);
+        return box;
+      }
+
+      // B：Jackett / Prowlarr
+      function paneTorznab() {
+        var url = el('input', { class: 'ffc-input', id: 'ffcTzUrl', placeholder: 'http://127.0.0.1:9117/api/v2.0/indexers/all/results/torznab' });
+        var key = el('input', { class: 'ffc-input', id: 'ffcTzKey', placeholder: 'Jackett 首页右上角的 API Key' });
+        var name = el('input', { class: 'ffc-input', id: 'ffcTzName', value: 'Jackett' });
+        var types = [];
+        var out = el('div');
+        function rule() { return { name: name.value.trim() || 'Jackett', kind: 'torznab', endpoints: [url.value.trim()], apiKey: key.value.trim(), types: types, enabled: true }; }
+        return el('div', { style: 'display:flex; flex-direction:column; gap:.9em' }, [
+          el('div', { class: 'ffc-desc', text: 'Jackett 和 Prowlarr 已经适配了几百个资源站点。接上一个，就能用它里面配置好的所有站点，站点改版也由它们跟进。' }),
+          el('div', { class: 'ffc-field' }, [el('label', { for: 'ffcTzUrl', text: 'Torznab 地址' }), url, el('div', { class: 'ffc-desc', text: 'Jackett：首页站点旁的"Copy Torznab Feed"，把站点 ID 换成 all 可一次搜索全部站点。Prowlarr：站点的 Torznab 地址（以 /api 结尾）。' })]),
+          el('div', { class: 'ffc-field' }, [el('label', { for: 'ffcTzKey', text: 'API Key' }), key]),
+          el('div', { style: 'display:flex; gap:.8em; align-items:center; flex-wrap:wrap' }, [el('label', { for: 'ffcTzName', text: '站点名' }), name, el('span', { class: 'ffc-desc', text: '负责的类型' }), typeChips(types)]),
+          out,
+          el('div', { class: 'ffc-actions' }, [
+            el('button', { type: 'button', class: 'ffc-btn', text: '测试连接', onclick: function () {
+              if (!url.value.trim()) return;
+              out.innerHTML = '<div class="ffc-desc">正在搜索"' + esc(ed.sample) + '"…</div>';
+              api('POST', 'FireFly/sources/test', { rule: rule(), keyword: ed.sample }).then(function (r) { out.innerHTML = ''; out.appendChild(testResult(r)); }, function () { out.innerHTML = '<div class="ffc-note bad">请求失败</div>'; });
+            } }),
+            el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '添加', onclick: function () { if (url.value.trim()) addSite(rule(), false); } }),
+          ]),
+        ]);
+      }
+
+      // C：粘贴规则片段或订阅地址
+      function paneSnippet() {
+        var text = el('textarea', { class: 'ffc-input', id: 'ffcSnippet', rows: '10', style: 'font-family:ui-monospace,Menlo,monospace; font-size:.85em', placeholder: '{\n  "name": "站点名",\n  "kind": "jsonApi",\n  "endpoints": ["https://…/api/search"],\n  "response": { "itemsPath": "data.list", "fields": { "infoHash": "hash", "name": "title" } }\n}\n\n也可以粘贴规则订阅地址（https://…）' });
+        var out = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
+        function run() {
+          var value = text.value.trim();
+          if (!value) return;
+          out.innerHTML = '<div class="ffc-desc">正在读取…</div>';
+          var ready = /^https?:\/\//i.test(value)
+            ? api('POST', 'FireFly/sources/import', { url: value }).then(function (r) { return r.text; })
+            : Promise.resolve(value);
+          ready.then(function (json) { out.innerHTML = ''; out.appendChild(snippetPreview(json)); }, function (e) {
+            out.innerHTML = '';
+            out.appendChild(el('div', { class: 'ffc-note bad', text: '取不到这个地址' + (e && e.responseJSON && e.responseJSON.error ? '：' + e.responseJSON.error : '') }));
+          });
+        }
+        return el('div', { style: 'display:flex; flex-direction:column; gap:.9em' }, [
+          el('div', { class: 'ffc-field' }, [el('label', { for: 'ffcSnippet', text: '粘贴别人分享的站点规则（一个站点、多个站点或整份覆盖文件都可以），或规则订阅地址' }), text]),
+          el('div', { class: 'ffc-note warn', text: '规则只决定插件去哪个地址搜索、怎么读结果，不会执行任何代码。添加前会先试搜一次让你确认。' }),
+          el('div', { class: 'ffc-actions' }, [el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '检查并试搜', onclick: run })]),
+          out,
+        ]);
+      }
+
+      function snippetPreview(json) {
+        var box = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
+        var data;
+        try { data = JSON.parse(json); } catch (e) {
+          box.appendChild(el('div', { class: 'ffc-note bad', text: '不是合法的 JSON：' + e.message }));
+          return box;
+        }
+        var list = Array.isArray(data) ? data : data && Array.isArray(data.sources) ? data.sources : data && data.name ? [data] : [];
+        if (data && data.format > 1) { box.appendChild(el('div', { class: 'ffc-note bad', text: '这份规则的格式版本 ' + data.format + ' 高于插件支持的版本，请先升级插件。' })); return box; }
+        if (!list.length) { box.appendChild(el('div', { class: 'ffc-note bad', text: '里面没有找到站点（需要 name、kind、endpoints）。' })); return box; }
+        list.forEach(function (rule) {
+          var problems = [];
+          if (!rule.name) problems.push('缺少 name');
+          if (rule.kind !== 'jsonApi' && rule.kind !== 'torznab') problems.push('kind 必须是 jsonApi 或 torznab');
+          if (!rule.endpoints || !rule.endpoints.length) problems.push('缺少 endpoints');
+          if (rule.kind === 'jsonApi' && !(rule.response && rule.response.itemsPath)) problems.push('缺少 response.itemsPath');
+          var card = el('div', { class: 'ffc-panel' }, [el('strong', { text: rule.name || '（没有名字）' })]);
+          if (problems.length) {
+            card.appendChild(el('div', { class: 'ffc-note bad', text: problems.join('；') }));
+          } else {
+            rule.types = rule.types || [];
+            card.appendChild(el('div', { class: 'ffc-desc', text: '会访问：' + rule.endpoints.map(host).join('、') }));
+            var result = el('div', { class: 'ffc-desc', text: '正在试搜"' + ed.sample + '"…' });
+            card.appendChild(result);
+            card.appendChild(siteForm(rule, null));
+            api('POST', 'FireFly/sources/test', { rule: rule, keyword: ed.sample }).then(function (r) { result.innerHTML = ''; result.className = ''; result.appendChild(testResult(r)); }, function () { result.textContent = '试搜失败'; });
+          }
+          box.appendChild(card);
+        });
+        return box;
+      }
+
+      // 手动调整字段映射：下拉框里是接口返回里实际出现的字段（带示例值）
+      function mappingDialog(r, rule) {
+        var api0 = new URL(r.apiUrl);
+        rule = rule || {
+          name: api0.host, kind: 'jsonApi', endpoints: [api0.origin + api0.pathname], pageSize: 10, maxPages: 1, types: [],
+          request: { keywordParam: r.keywordParam || 'keyword', limitParam: 'limit', offsetParam: 'offset', maxLimit: 10 },
+          response: { itemsPath: (r.arrays[0] || {}).path || '', fields: { infoHash: '', name: '', createdAtFormat: 'unix' } },
+        };
+        var f = rule.response.fields;
+        var body = el('div', { class: 'ffc-body' });
+        var preview = el('div');
+        function select(label, value, options, onchange, optional) {
+          var s = el('select', { class: 'ffc-input', 'aria-label': label });
+          if (optional) s.appendChild(el('option', { value: '', text: '（没有）' }));
+          options.forEach(function (o) { s.appendChild(el('option', { value: o.path, text: o.path + '  ·  ' + o.sample })); });
+          if (value && !options.some(function (o) { return o.path === value; })) s.appendChild(el('option', { value: value, text: value }));
+          s.value = value || '';
+          s.addEventListener('change', function () { onchange(s.value); });
+          return el('div', { class: 'ffc-maprow' }, [el('span', { text: label }), s]);
+        }
+        var left = el('div', {}, [
+          select('资源列表 *', rule.response.itemsPath, r.arrays, function (v) { rule.response.itemsPath = v; }),
+          select('infoHash *', f.infoHash, r.fields, function (v) { f.infoHash = v; }),
+          select('标题 *', f.name, r.fields, function (v) { f.name = v; }),
+          select('磁力链接', f.magnet, r.fields, function (v) { f.magnet = v || null; }, true),
+          select('体积', f.size, r.fields, function (v) { f.size = v || null; }, true),
+          select('时间', f.createdAt, r.fields, function (v) { f.createdAt = v || null; }, true),
+          el('div', { class: 'ffc-maprow' }, [el('span', { text: '时间格式' }), (function () {
+            var s = el('select', { class: 'ffc-input', 'aria-label': '时间格式' }, [el('option', { value: 'unix', text: 'Unix 秒' }), el('option', { value: 'unixms', text: 'Unix 毫秒' }), el('option', { value: 'iso', text: 'ISO 日期文本' })]);
+            s.value = f.createdAtFormat || 'unix';
+            s.addEventListener('change', function () { f.createdAtFormat = s.value; });
+            return s;
+          })()]),
+        ]);
+        body.appendChild(el('div', { class: 'ffc-desc', text: '在左边为每个字段选接口返回里对应的那一项（右边是返回的样例），然后点"预览"看读出来的结果。带 * 的必填。' }));
+        body.appendChild(el('div', { class: 'ffc-map' }, [left, el('pre', { class: 'ffc-code', text: r.sampleJson || '' })]));
+        body.appendChild(el('div', { class: 'ffc-actions' }, [
+          el('button', { type: 'button', class: 'ffc-btn', text: '复制为规则片段', onclick: function () { copy(JSON.stringify(rule, null, 2)); } }),
+          el('button', { type: 'button', class: 'ffc-btn', text: '预览', onclick: function () {
+            preview.innerHTML = '<div class="ffc-desc">正在搜索…</div>';
+            api('POST', 'FireFly/sources/test', { rule: rule, keyword: ed.sample }).then(function (x) { preview.innerHTML = ''; preview.appendChild(testResult(x)); }, function () { preview.innerHTML = '<div class="ffc-note bad">请求失败</div>'; });
+          } }),
+        ]));
+        body.appendChild(preview);
+        body.appendChild(siteForm(rule, null));
+        openModal('调整 ' + rule.name + ' 的读取方式', body);
+      }
+
+      function copy(text) {
+        if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { Dashboard.alert('已复制'); }, function () { prompt('复制下面的内容', text); });
+        else prompt('复制下面的内容', text);
+      }
+
+      // ---------- 读取 / 保存 ----------
       function fillBases(s) {
         bases.forEach(function (b) {
           var select = page.querySelector('#' + b.key + 'Select');
@@ -105,6 +988,11 @@
         return select.selectedIndex === 0 ? '' : select.value;
       }
 
+      function summaries(c) {
+        $('#ffcDownloadSum').textContent = '迅雷下载目录 ' + (c.ThunderDownloadDir || '~/Downloads/FireFly');
+        $('#ffcTmdbSum').textContent = (c.TmdbApiKey ? 'API Key 已填写' : '还没填 API Key') + ' · ' + (c.TmdbLanguage || 'zh-CN');
+      }
+
       page.querySelector('#ffClearCache').addEventListener('click', function () {
         var btn = this;
         btn.disabled = true;
@@ -122,6 +1010,53 @@
         ApiClient.ajax({ url: ApiClient.getUrl('FireFly/status'), type: 'GET', dataType: 'json' }).then(fillBases);
       }
 
+      function loadEditor() {
+        return api('GET', 'FireFly/rules/editor').then(function (r) {
+          ed.lower = r.lower;
+          ed.overlay = r.overlay || {};
+          ed.categories = r.categories || [];
+          ed.health = r.health || {};
+          ed.sample = r.sample || ed.sample;
+          $('#ffcRulesFile').textContent = r.rulesFile + (r.rulesFileExists ? '' : '（不存在）');
+          renderAdvanced(r.effective, r.warnings);
+          ui.dirty = false;
+          $('#ffcDirty').textContent = '保存后立即生效，不需要重启 Jellyfin';
+          renderAll();
+        });
+      }
+
+      Array.prototype.forEach.call(page.querySelectorAll('[data-goto]'), function (a) {
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          var target = page.querySelector('#' + a.getAttribute('data-goto'));
+          if (target.tagName === 'DETAILS') target.open = true;
+          target.scrollIntoView({ behavior: 'smooth' });
+        });
+      });
+      $('#ffcAddSite').addEventListener('click', function () { addSiteDialog('A'); });
+      $('#ffcResetKw').addEventListener('click', function () { delete ed.overlay.keywords; ui.editingKw = null; markDirty(); renderAll(); });
+      $('#ffcResetAll').addEventListener('click', function () {
+        if (!confirm('清除本页所有站点和关键词改动，恢复成内置规则（和 rules.json）？保存后生效。')) return;
+        ed.overlay = {}; ui.open = null; ui.editingKw = null; markDirty(); renderAll();
+      });
+      $('#ffcExport').addEventListener('click', function () { copy(cleanOverlay() ? JSON.stringify(JSON.parse(cleanOverlay()), null, 2) : '{}'); });
+      $('#ffcImportAll').addEventListener('click', function () {
+        var text = prompt('粘贴导出的改动（会替换本页现有的站点和关键词改动）');
+        if (!text) return;
+        try { ed.overlay = JSON.parse(text) || {}; markDirty(); renderAll(); } catch (e) { Dashboard.alert('不是合法的 JSON：' + e.message); }
+      });
+      $('#ffcTry').addEventListener('click', function () {
+        var title = $('#ffcTryTitle').value.trim();
+        if (!title) return;
+        var out = $('#ffcTryResult');
+        out.textContent = '正在搜索…';
+        api('POST', 'FireFly/keywords/try', { title: title, category: ui.planTab, overlay: cleanOverlay() }).then(function (r) {
+          out.innerHTML = '';
+          out.appendChild(document.createTextNode('优选阶段找到 ' + r.count + ' 条' + (r.perKeyword && r.perKeyword.length ? '：' + r.perKeyword.map(function (k) { return k.word + ' ' + k.count + ' 条'; }).join(' · ') : '') + (r.errors ? '（' + r.errors + ' 个请求失败）' : '')));
+        }, function () { out.textContent = '搜索失败'; });
+      });
+      $('#ffcTryTitle').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#ffcTry').click(); } });
+
       page.addEventListener('pageshow', function () {
         Dashboard.showLoadingMsg();
         ApiClient.getPluginConfiguration(pluginId).then(function (c) {
@@ -133,8 +1068,10 @@
           fields.forEach(function (f) { page.querySelector('#' + f).value = c[f] || ''; });
           if (!lang.value) lang.value = 'zh-CN';
           checks.forEach(function (f) { page.querySelector('#' + f).checked = !!c[f]; });
+          summaries(c);
           Dashboard.hideLoadingMsg();
           loadBases();
+          loadEditor();
         });
       });
 
@@ -145,10 +1082,14 @@
           fields.forEach(function (f) { c[f] = page.querySelector('#' + f).value.trim(); });
           checks.forEach(function (f) { c[f] = page.querySelector('#' + f).checked; });
           bases.forEach(function (b) { c[b.key] = readBase(b.key); });
+          c.RulesOverlay = cleanOverlay();
+          c.PublisherKeywords = '';
           config = c;
           ApiClient.updatePluginConfiguration(pluginId, c).then(function (result) {
             Dashboard.processPluginConfigurationUpdateResult(result);
+            summaries(c);
             loadBases();
+            loadEditor();
           });
         });
         return false;

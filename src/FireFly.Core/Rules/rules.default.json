@@ -1,47 +1,11 @@
 {
   "format": 1,
-  "version": 4,
+  "version": 6,
   "updatedAt": "2026-10-21",
-  "sources": [
-    {
-      "name": "diao.im",
-      "kind": "jsonApi",
-      "endpoints": [
-        "https://m.diao.im/api/search"
-      ],
-      "pageSize": 10,
-      "maxPages": 5,
-      "enabled": true,
-      "request": {
-        "keywordParam": "keyword",
-        "limitParam": "limit",
-        "offsetParam": "offset",
-        "maxLimit": 10
-      },
-      "response": {
-        "statusPath": "status",
-        "statusOk": "200",
-        "messagePath": "message",
-        "itemsPath": "data.torrents",
-        "hasMorePath": "data.has_more",
-        "fields": {
-          "infoHash": "hash",
-          "name": "name",
-          "magnet": "magnet_uri",
-          "size": "size",
-          "createdAt": "created_at",
-          "createdAtFormat": "unix",
-          "files": "files",
-          "filePath": "path",
-          "fileSize": "size"
-        }
-      }
-    }
-  ],
-  "publisherKeywords": [
-    "高清剧集网",
-    "高清影视之家"
-  ],
+  "sources": [],
+  "keywords": {
+    "items": []
+  },
   "thunder": {
     "tempSuffixes": [
       ".xltd",
@@ -73,11 +37,20 @@
   "minVideoBytes": 52428800,
   "tmdb": {
     "apiBases": [
-      { "value": "https://api.tmdb.org/3", "label": "api.tmdb.org（推荐，中国大陆可直连）" },
-      { "value": "https://api.themoviedb.org/3", "label": "api.themoviedb.org（官方主域名，部分网络解析异常）" }
+      {
+        "value": "https://api.tmdb.org/3",
+        "label": "api.tmdb.org（推荐，中国大陆可直连）"
+      },
+      {
+        "value": "https://api.themoviedb.org/3",
+        "label": "api.themoviedb.org（官方主域名，部分网络解析异常）"
+      }
     ],
     "imageBases": [
-      { "value": "https://image.tmdb.org/t/p", "label": "image.tmdb.org（官方，中国大陆可直连）" }
+      {
+        "value": "https://image.tmdb.org/t/p",
+        "label": "image.tmdb.org（官方，中国大陆可直连）"
+      }
     ]
   },
   "discover": {

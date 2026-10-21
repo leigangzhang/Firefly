@@ -376,10 +376,15 @@ public class SearchServiceTests
         Assert.Equal(new[] { "BB", "CCC", "A" }, ordered.Select(r => r.InfoHash));
     }
 
+    // 发布版不内置站点；这份是社区常用的 diao.im 规则，只用来测 jsonApi 的字段映射
+    private static SourceRule DiaoRule() => RulesLoader.Parse("""
+        {"sources":[{"name": "diao.im", "kind": "jsonApi", "endpoints": ["https://m.diao.im/api/search"], "pageSize": 10, "maxPages": 5, "enabled": true, "types": [], "request": {"keywordParam": "keyword", "limitParam": "limit", "offsetParam": "offset", "maxLimit": 10}, "response": {"statusPath": "status", "statusOk": "200", "messagePath": "message", "itemsPath": "data.torrents", "hasMorePath": "data.has_more", "fields": {"infoHash": "hash", "name": "name", "magnet": "magnet_uri", "size": "size", "createdAt": "created_at", "createdAtFormat": "unix", "files": "files", "filePath": "path", "fileSize": "size"}}}]}
+        """).Sources.Single();
+
     [Fact]
     public void JsonApiRuleMapsDiaoResponseToReleases()
     {
-        var rule = RulesLoader.LoadDefault().Sources.Single(s => s.Name == "diao.im");
+        var rule = DiaoRule();
         using var doc = System.Text.Json.JsonDocument.Parse("""
             {"status":200,"message":"success","data":{"has_more":true,"torrents":[
               {"hash":"abcdef","name":"【高清剧集网发布 www.DDHDTV.com】测试.2024.1080p","size":123,"magnet_uri":"","created_at":1787365846,
@@ -403,7 +408,7 @@ public class SearchServiceTests
     [Fact]
     public void JsonApiRuleRejectsBadStatus()
     {
-        var rule = RulesLoader.LoadDefault().Sources.Single(s => s.Name == "diao.im");
+        var rule = DiaoRule();
         using var doc = System.Text.Json.JsonDocument.Parse("""{"status":500,"message":"busy"}""");
         var ex = Assert.Throws<SourceException>(() => JsonApiSource.ParsePage(rule, doc.RootElement, out _));
         Assert.Contains("busy", ex.Message);
@@ -513,7 +518,7 @@ public class RulesTests
         System.IO.File.WriteAllText(path, "{ not json");
         var rules = RulesLoader.Load(path);
         Assert.False(rules.HasOverride);
-        Assert.NotEmpty(rules.Sources);
+        Assert.NotEmpty(rules.VideoExtensions);
         Assert.Single(rules.Warnings);
     }
 }

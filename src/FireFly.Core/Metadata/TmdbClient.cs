@@ -22,7 +22,11 @@ public sealed record TmdbItem(
     IReadOnlyList<int>? GenreIds = null);
 
 /// <summary>SeasonEpisodes：剧集各季的集数（季号 → 集数），电影为空。</summary>
-public sealed record TmdbNames(string? OriginalTitle, IReadOnlyList<string> AlternateTitles, IReadOnlyDictionary<int, int>? SeasonEpisodes = null);
+public sealed record TmdbNames(string? OriginalTitle, IReadOnlyList<string> AlternateTitles, IReadOnlyDictionary<int, int>? SeasonEpisodes = null)
+{
+    /// <summary>TMDb 类型 ID，用来判断资源类型（动漫、纪录片、综艺）。</summary>
+    public IReadOnlyList<int> Genres { get; init; } = Array.Empty<int>();
+}
 
 public sealed record TmdbPageResult(int Page, int TotalPages, int TotalResults, IReadOnlyList<TmdbItem> Items);
 
@@ -247,7 +251,8 @@ public sealed class TmdbClient
             .Where(x => x.No is not null && x.Count is > 0)
             .GroupBy(x => x.No!.Value)
             .ToDictionary(g => g.Key, g => g.First().Count!.Value);
-        return new TmdbNames(original, list, seasons);
+        var genres = Arr(r, "genres").Select(g => Int(g, "id")).OfType<int>().ToList();
+        return new TmdbNames(original, list, seasons) { Genres = genres };
     }
 
     public async Task<TmdbItem?> DetailAsync(MediaKind kind, string tmdbId, CancellationToken ct)

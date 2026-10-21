@@ -7,7 +7,62 @@ using FireFly.Core.Rules;
 namespace FireFly.Core.Sources;
 
 /// <summary>NeedsFallback：只做了优选阶段、还应再做降级搜索（前端据此异步追加）。</summary>
-public sealed record SearchResult(MediaQuery Query, IReadOnlyList<Release> Releases, IReadOnlyList<string> Queries, IReadOnlyList<string> Errors, bool FromCache, bool NeedsFallback = false);
+public sealed record SearchResult(MediaQuery Query, IReadOnlyList<Release> Releases, IReadOnlyList<string> Queries, IReadOnlyList<string> Errors, bool FromCache, bool NeedsFallback = false)
+{
+    /// <summary>这次按什么类型、用了几个站点和关键词搜的（获取资源面板顶部显示）。</summary>
+    public SearchPlanSummary? Plan { get; init; }
+}
+
+/// <summary>NoSiteForCategory：没有站点负责这个类型，改用了全部站点。</summary>
+public sealed record SearchPlanSummary(string Category, int Sources, int Keywords, bool NoSiteForCategory);
+
+/// <summary>一个站点在这次搜索里用哪些关键词；Rank 是站点的优先级（0 最优先）。</summary>
+public sealed record SourcePlan(IResourceSource Source, IReadOnlyList<string> Keywords, int Rank);
+
+/// <summary>按类型选出的站点和各站点生效的关键词；KeywordOrder 是全部关键词的优先级顺序。</summary>
+public sealed record SearchPlan(string Category, IReadOnlyList<SourcePlan> Sources, IReadOnlyList<string> KeywordOrder, bool NoSiteForCategory)
+{
+    public SearchPlanSummary Summary() =>
+        new(Category, Sources.Count, Sources.SelectMany(s => s.Keywords).Distinct(StringComparer.OrdinalIgnoreCase).Count(), NoSiteForCategory);
+}
+
+/// <summary>一次请求的结果，用来更新配置页里站点的状态灯。</summary>
+public sealed record SourceReport(string Source, bool Ok, TimeSpan Elapsed, int Count, string? Error)
+{
+    public DateTimeOffset At { get; init; } = DateTimeOffset.UtcNow;
+}
+
+public static class SearchPlanner
+{
+    /// <summary>
+    /// 只请求负责这个类型的站点（站点的 types 为空表示全部类型）；没有站点负责时用全部站点。
+    /// 每个站点只用对它、对这个类型生效的关键词。站点和关键词都按配置里的顺序排优先级。
+    /// </summary>
+    public static SearchPlan Plan(RulesDocument rules, IReadOnlyList<IResourceSource> sources, string category)
+    {
+        var types = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rule in rules.Sources)
+        {
+            types.TryAdd(rule.Name, rule.Types);
+        }
+
+        bool Serves(IResourceSource s) =>
+            !types.TryGetValue(s.Name, out var t) || t.Count == 0 || t.Contains(category, StringComparer.OrdinalIgnoreCase);
+
+        var chosen = sources.Where(Serves).ToList();
+        var none = chosen.Count == 0 && sources.Count > 0;
+        if (none)
+        {
+            chosen = sources.ToList();
+        }
+
+        var keywords = rules.EffectiveKeywords();
+        var plans = chosen
+            .Select((s, i) => new SourcePlan(s, keywords.Where(k => k.AppliesTo(s.Name, category)).Select(k => k.Word).ToList(), i))
+            .ToList();
+        return new SearchPlan(category, plans, keywords.Select(k => k.Word).ToList(), none);
+    }
+}
 
 /// <summary>
 /// Preferred：只搜带发布者关键词的优选资源，先返回给用户；
@@ -29,17 +84,32 @@ public enum SearchStage
 public sealed class SearchService
 {
     private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(6);
-    private readonly Func<IReadOnlyList<IResourceSource>> _sources;
     private readonly Func<RulesDocument> _rules;
-    private readonly Func<IReadOnlyList<string>> _keywords;
+    private readonly Func<string, SearchPlan> _plan;
     private readonly ConcurrentDictionary<string, (DateTimeOffset At, SearchResult Result)> _cache = new();
 
+    /// <summary>所有站点用同一组关键词（不区分类型）。</summary>
     public SearchService(Func<IReadOnlyList<IResourceSource>> sources, Func<RulesDocument> rules, Func<IReadOnlyList<string>> keywords)
+        : this(rules, category =>
+        {
+            var words = keywords();
+            return new SearchPlan(category, sources().Select((s, i) => new SourcePlan(s, words, i)).ToList(), words, false);
+        })
     {
-        _sources = sources;
-        _rules = rules;
-        _keywords = keywords;
     }
+
+    /// <summary>plan：按资源类型给出要请求的站点和各站点的关键词，一般是 SearchPlanner.Plan。</summary>
+    public SearchService(Func<RulesDocument> rules, Func<string, SearchPlan> plan)
+    {
+        _rules = rules;
+        _plan = plan;
+    }
+
+    /// <summary>每次请求完一个站点时调用，用来记录站点状态。</summary>
+    public Action<SourceReport>? Report { get; set; }
+
+    /// <summary>规则或配置变了：清掉搜索缓存，下次重新搜。</summary>
+    public void ClearCache() => _cache.Clear();
 
     /// <summary>
     /// 按 InfoHash 找回最近搜索结果里的版本。前端只拿到版本 ID，提交下载时由这里换回完整版本（含磁力），
@@ -101,15 +171,16 @@ public sealed class SearchService
     /// </summary>
     private async Task<SearchResult> PreferredAsync(MediaQuery query, CancellationToken ct)
     {
-        var keywords = _keywords();
+        var plan = _plan(query.EffectiveCategory);
         var queries = new List<string>();
         var errors = new List<string>();
         var filtered = new List<Release>();
         foreach (var title in SearchTitles(query))
         {
-            var batch = query.Kind == MediaKind.Series
-                ? keywords.SelectMany(k => SeasonForms(query).Select(f => $"{title}{f} {k}"))
-                : keywords.Select(k => $"{title} {k}");
+            // 站点在前、关键词在后：同一个版本出现在多个站点时，保留排在前面的站点的那条
+            var batch = plan.Sources.SelectMany(sp => query.Kind == MediaKind.Series
+                ? sp.Keywords.SelectMany(k => SeasonForms(query).Select(f => (sp.Source, $"{title}{f} {k}")))
+                : sp.Keywords.Select(k => (sp.Source, $"{title} {k}")));
             filtered = Merge(filtered, Filter(await RunAsync(batch, queries, errors, ct).ConfigureAwait(false), query));
             if (filtered.Count > 0)
             {
@@ -120,7 +191,7 @@ public sealed class SearchService
         var needsFallback = query.Kind == MediaKind.Series
             ? NeedsSeriesFallback(filtered, _rules(), query.SeasonEpisodes)
             : filtered.Count < MinResultsPerPackType;
-        return new SearchResult(query, Order(filtered, keywords), queries, errors, false, needsFallback);
+        return new SearchResult(query, Order(filtered, plan), queries, errors, false, needsFallback) { Plan = plan.Summary() };
     }
 
     /// <summary>
@@ -129,21 +200,22 @@ public sealed class SearchService
     /// </summary>
     private async Task<SearchResult> FallbackAsync(MediaQuery query, SearchResult preferred, CancellationToken ct)
     {
+        var plan = _plan(query.EffectiveCategory);
         var titles = SearchTitles(query);
         var queries = preferred.Queries.ToList();
         var errors = preferred.Errors.ToList();
-        var batch = query.Kind == MediaKind.Series
-            ? titles.SelectMany(t => SeasonForms(query).Where(f => f.Length > 0).Select(f => t + f))
+        var words = query.Kind == MediaKind.Series
+            ? titles.SelectMany(t => SeasonForms(query).Where(f => f.Length > 0).Select(f => t + f)).ToList()
             : titles;
-        var filtered = Merge(preferred.Releases, Filter(await RunAsync(batch, queries, errors, ct, FallbackPages).ConfigureAwait(false), query));
+        var filtered = Merge(preferred.Releases, Filter(await RunAsync(Each(plan, words), queries, errors, ct, FallbackPages).ConfigureAwait(false), query));
 
         // 剧集带季号也搜不到时，最后只用片名搜一次
         if (filtered.Count == 0 && query.Kind == MediaKind.Series)
         {
-            filtered = Filter(await RunAsync(titles, queries, errors, ct, FallbackPages).ConfigureAwait(false), query);
+            filtered = Filter(await RunAsync(Each(plan, titles), queries, errors, ct, FallbackPages).ConfigureAwait(false), query);
         }
 
-        return new SearchResult(query, Order(filtered, _keywords()), queries, errors, false);
+        return new SearchResult(query, Order(filtered, plan), queries, errors, false) { Plan = plan.Summary() };
     }
 
     /// <summary>剧集搜索词里的季号写法：""（不带季号）、" 第一季"、" S01"。资源站认"第一季"，不认"第1季"。</summary>
@@ -216,15 +288,18 @@ public sealed class SearchService
             .Select(g => g.First())
             .ToList();
 
-    /// <summary>同一级的搜索词并发请求（最多 MaxParallelRequests 个），结果按搜索词顺序拼接，保证排序稳定。</summary>
-    private async Task<List<Release>> RunAsync(IEnumerable<string> keywords, List<string> queries, List<string> errors, CancellationToken ct, int? maxPages = null)
+    /// <summary>每个站点都用这些搜索词（降级阶段不带关键词）。</summary>
+    private static IEnumerable<(IResourceSource Source, string Keyword)> Each(SearchPlan plan, IReadOnlyList<string> words) =>
+        plan.Sources.SelectMany(sp => words.Select(w => (sp.Source, w)));
+
+    /// <summary>同一级的请求并发（最多 MaxParallelRequests 个），结果按请求顺序拼接，保证排序稳定。</summary>
+    private async Task<List<Release>> RunAsync(IEnumerable<(IResourceSource Source, string Keyword)> requests, List<string> queries, List<string> errors, CancellationToken ct, int? maxPages = null)
     {
-        var list = keywords.ToList();
-        queries.AddRange(list);
-        var sources = _sources();
+        var list = requests.ToList();
+        queries.AddRange(list.Select(r => r.Keyword).Distinct().Where(k => !queries.Contains(k)).ToList());
         using var gate = new SemaphoreSlim(MaxParallelRequests);
         var tasks = list
-            .SelectMany(keyword => sources.Select(source => SearchOneAsync(source, keyword, maxPages, gate, ct)))
+            .Select(r => SearchOneAsync(r.Source, r.Keyword, maxPages, gate, ct))
             .ToList();
         var outcomes = await Task.WhenAll(tasks).ConfigureAwait(false);
 
@@ -246,15 +321,19 @@ public sealed class SearchService
     /// <summary>降级搜索不带发布者关键词，结果多且杂，只取前 3 页（30 条）。</summary>
     private const int FallbackPages = 3;
 
-    private static async Task<(IReadOnlyList<Release> Releases, string? Error)> SearchOneAsync(IResourceSource source, string keyword, int? maxPages, SemaphoreSlim gate, CancellationToken ct)
+    private async Task<(IReadOnlyList<Release> Releases, string? Error)> SearchOneAsync(IResourceSource source, string keyword, int? maxPages, SemaphoreSlim gate, CancellationToken ct)
     {
         await gate.WaitAsync(ct).ConfigureAwait(false);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            return (await source.SearchAsync(keyword, ct, maxPages).ConfigureAwait(false), null);
+            var releases = await source.SearchAsync(keyword, ct, maxPages).ConfigureAwait(false);
+            Report?.Invoke(new SourceReport(source.Name, true, watch.Elapsed, releases.Count, null));
+            return (releases, null);
         }
         catch (SourceException ex)
         {
+            Report?.Invoke(new SourceReport(source.Name, false, watch.Elapsed, 0, ex.Message));
             return (Array.Empty<Release>(), ex.Message);
         }
         finally
@@ -353,31 +432,97 @@ public sealed class SearchService
     private static string Normalize(string s)
     {
         var sb = new System.Text.StringBuilder(s.Length);
+        var bracket = false;
         foreach (var c in s)
         {
             if (char.IsLetterOrDigit(c))
             {
-                if (sb.Length >= 2 && sb[^1] == ' ' && IsCjk(c) && IsCjk(sb[^2]))
+                // 括号是硬边界："[某字幕组] 某动画" 里的"组"和"某"不能连起来
+                if (!bracket && sb.Length >= 2 && sb[^1] == ' ' && IsCjk(c) && IsCjk(sb[^2]))
                 {
                     sb.Length--;
                 }
 
                 sb.Append(c);
+                bracket = false;
             }
-            else if (sb.Length > 0 && sb[^1] != ' ')
+            else
             {
-                sb.Append(' ');
+                bracket |= Brackets.Contains(c);
+                if (sb.Length > 0 && sb[^1] != ' ')
+                {
+                    sb.Append(' ');
+                }
             }
         }
 
         return sb.ToString().Trim();
     }
 
+    private const string Brackets = "[]【】()（）「」『』〔〕<>《》";
+
+    /// <summary>所有站点用同一组关键词时的排序。</summary>
     internal static List<Release> Order(IEnumerable<Release> releases, IReadOnlyList<string> keywords) =>
+        Order(releases, r => FirstHit(r.Name, keywords, keywords), _ => 0);
+
+    /// <summary>每条资源只看它所在站点、这个类型生效的关键词；站点优先级按配置顺序。</summary>
+    internal static List<Release> Order(IEnumerable<Release> releases, SearchPlan plan)
+    {
+        var bySource = new Dictionary<string, SourcePlan>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sp in plan.Sources)
+        {
+            bySource.TryAdd(sp.Source.Name, sp);
+        }
+
+        return Order(
+            releases,
+            r => bySource.TryGetValue(r.Source, out var sp) ? FirstHit(r.Name, sp.Keywords, plan.KeywordOrder) : null,
+            r => bySource.TryGetValue(r.Source, out var sp) ? sp.Rank : int.MaxValue);
+    }
+
+    /// <summary>
+    /// 排序：命中优先级高的关键词 → 画质降级（枪版、纯外语靠后）→ 站点顺序 → 分辨率 → 发布时间。
+    /// 不打分，只决定展示顺序；KeywordRank 写进每条资源，前端据此标"优选"。
+    /// </summary>
+    private static List<Release> Order(IEnumerable<Release> releases, Func<Release, int?> keywordRank, Func<Release, int> sourceRank) =>
         releases
-            .OrderByDescending(r => keywords.Any(k => r.Name.Contains(k, StringComparison.OrdinalIgnoreCase)))
+            .Select(r => r with { KeywordRank = keywordRank(r) })
+            .OrderBy(r => r.KeywordRank ?? int.MaxValue)
             .ThenBy(Demotion)
+            .ThenBy(sourceRank)
             .ThenByDescending(r => r.Traits.Resolution)
             .ThenByDescending(r => r.CreatedAt ?? DateTimeOffset.MinValue)
             .ToList();
+
+    /// <summary>标题里命中的关键词中，优先级最高的那个在 order 里的位置。</summary>
+    private static int? FirstHit(string name, IReadOnlyList<string> keywords, IReadOnlyList<string> order)
+    {
+        int? best = null;
+        foreach (var k in keywords)
+        {
+            if (k.Length == 0 || !name.Contains(k, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var index = IndexOf(order, k);
+            var rank = index < 0 ? order.Count : index;
+            best = best is null ? rank : Math.Min(best.Value, rank);
+        }
+
+        return best;
+    }
+
+    private static int IndexOf(IReadOnlyList<string> list, string value)
+    {
+        for (var i = 0; i < list.Count; i++)
+        {
+            if (string.Equals(list[i], value, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
 }

@@ -259,6 +259,11 @@
     list.innerHTML = '';
     removeRail();
     if (s.packSlot) s.packSlot.innerHTML = '';
+    if (r.plan && !r.plan.sources) {
+      emptyState(list.appendChild(el('div')), 'travel_explore', T('还没有添加资源站点'), el('div', { class: 'ff-dim ff-small', text: T('萤火虫不内置资源站。请管理员在 控制台 → 插件 → 萤火虫 → 资源站点 里添加。') }));
+      return;
+    }
+    if (r.plan) list.appendChild(planBar(r));
     if (r.sourceErrors) list.appendChild(el('div', { class: 'ff-note ff-error', text: T('部分资源源暂时不可用，结果可能不全，稍后可点右上角刷新') }));
     if (!r.releases.length) {
       emptyState(list.appendChild(el('div')), 'search_off', T('没有找到合适的资源'), el('div', { class: 'ff-dim ff-small', text: T('可以稍后刷新再试，或换一季') }));
@@ -313,6 +318,30 @@
     });
     eps.forEach(function (g) { g.head.textContent = epLabel(g.episode) + ' · ' + T('{n} 个版本', { n: g.count }); });
     if (eps.length > 1) showRail(eps);
+  }
+
+  // 按什么类型搜的（决定请求哪些站点、用哪些关键词）；类型判断错了可以换一个重搜
+  function planBar(r) {
+    var s = drawer.search;
+    var p = r.plan;
+    var bar = el('div', { class: 'ff-planbar' }, [
+      el('span', { class: 'ff-dim', text: T('按') }),
+      el('span', { class: 'ff-plancat', text: T(p.categoryLabel) }),
+      el('span', { class: 'ff-dim', text: T('搜索 · {s} 个站点 · {k} 个关键词', { s: p.sources, k: p.keywords }) + (p.noSiteForCategory ? T('（没有站点负责这个类型，用了全部站点）') : '') }),
+    ]);
+    var others = (r.categories || []).filter(function (c) { return c.key !== p.category; });
+    if (others.length) {
+      bar.appendChild(el('span', { class: 'ff-dim ff-planswitch', text: T('类型不对？换成') }));
+      others.forEach(function (c) {
+        bar.appendChild(el('button', { class: 'ff-fopt', text: T(c.label), onclick: function () {
+          s.request.category = c.key;
+          s.result = null;
+          s.packTab = null;
+          runSearch(false);
+        } }));
+      });
+    }
+    return bar;
   }
 
   var PACK_TYPES = [{ key: 'full', label: '整季' }, { key: 'multi', label: '多集' }, { key: 'single', label: '单集' }];
