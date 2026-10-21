@@ -1105,6 +1105,53 @@
     return series ? t.kinds.series : t.kinds.movie;
   }
 
+  function seasonSection(d) {
+    var current = d.seasons.filter(function (s) { return s.number === d.currentSeason; })[0] || d.seasons[d.seasons.length - 1];
+    var latest = d.seasons.reduce(function (m, s) { return s.number > m ? s.number : m; }, 0);
+    var others = d.seasons.filter(function (s) { return s !== current; }).sort(function (a, b) { return b.number - a.number; });
+    var list = el('div', { class: 'ff-season-list' }, [seasonCard(d, current)]);
+    var rest = null;
+    var toggle = others.length ? el('button', { class: 'ff-link-btn', text: '查看全部季（共 ' + d.seasons.length + ' 季）', onclick: function () {
+      if (!rest) {
+        rest = el('div', { class: 'ff-season-list' }, others.map(function (s) { return seasonCard(d, s); }));
+        list.parentNode.insertBefore(rest, toggle);
+      } else {
+        rest.style.display = rest.style.display === 'none' ? '' : 'none';
+      }
+      toggle.textContent = rest.style.display === 'none' ? '查看全部季（共 ' + d.seasons.length + ' 季）' : '收起其他季';
+    } }) : null;
+    return section(current.number === latest ? '最新一季' : '当前季', list, toggle);
+  }
+
+  function cnDate(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '');
+    return m ? m[1] + ' 年 ' + m[2] + ' 月 ' + m[3] + ' 日' : '';
+  }
+
+  function seasonCard(d, s) {
+    var foot = el('div', { class: 'ff-season-foot' }, [el('span', { class: 'ff-dim', text: s.airDate ? '首播 ' + cnDate(s.airDate) : '' })]);
+    api('GET', 'detail/tv/' + d.tmdbId + '/season/' + s.number).then(function (r) {
+      var e = r.episode;
+      if (!e) return;
+      foot.innerHTML = '';
+      foot.appendChild(el('span', { class: 'material-icons ff-cal', text: 'event', 'aria-hidden': 'true' }));
+      foot.appendChild(el('span', { class: 'ff-ep-name', text: e.name || ('第 ' + e.episode + ' 集') }));
+      foot.appendChild(el('span', { text: '(' + e.season + 'x' + e.episode + (e.airDate ? ', ' + cnDate(e.airDate) : '') + ')' + (e.aired ? '' : ' 即将开播') }));
+    }).catch(function () {});
+    return el('div', { class: 'ff-season-card' }, [
+      el('div', { class: 'ff-season-poster' }, [s.posterUrl ? el('img', { src: tmdbImg(s.posterUrl), loading: 'lazy', alt: s.name }) : el('div', { class: 'ff-noposter' })]),
+      el('div', { class: 'ff-season-body' }, [
+        el('h3', { class: 'ff-season-title', text: s.name || ('第 ' + s.number + ' 季') }),
+        el('div', { class: 'ff-season-meta' }, [
+          s.rating ? el('span', { class: 'ff-badge', text: '★ ' + Math.round(s.rating * 10) + '%' }) : null,
+          el('span', { text: [s.year, s.episodeCount ? '共 ' + s.episodeCount + ' 集' : null].filter(Boolean).join(' • ') }),
+        ]),
+        s.overview ? el('p', { class: 'ff-season-overview', text: s.overview }) : null,
+        foot,
+      ]),
+    ]);
+  }
+
   function section(title) {
     var s = el('section', { class: 'ff-section' }, [el('h2', { class: 'ff-h2', text: title })]);
     Array.prototype.slice.call(arguments, 1).forEach(function (c) { if (c) s.appendChild(c); });
