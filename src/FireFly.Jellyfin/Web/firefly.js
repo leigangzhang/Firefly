@@ -621,6 +621,7 @@
     srch.q = q;
     srch.page = 1;
     srch.totalPages = 1;
+    srch.pending = [];
     v.filters.style.display = v.grid.style.display = v.more.style.display = 'none';
     v.search.style.display = '';
     v.sgrid.innerHTML = '';
@@ -641,7 +642,7 @@
     scroller().scrollTop = srch.listScroll;
   }
 
-  function fetchSearch(pageNo, seq) {
+  function fetchSearch(pageNo, seq, toppingUp) {
     var v = hot.view;
     srch.loading = true;
     v.smore.innerHTML = '';
@@ -652,19 +653,23 @@
       if (!r.configured) { message(v.smore, '请先在 控制台 → 插件 → FireFly 里填写 TMDb API Key'); return; }
       srch.page = r.page || pageNo;
       srch.totalPages = r.totalPages || 1;
+      srch.pending = (srch.pending || []).concat(r.items);
+      var hasMore = srch.page < srch.totalPages;
+      if (!toppingUp && needsTopUp(v.sgrid, srch.pending, hasMore)) { srch.loading = true; fetchSearch(srch.page + 1, seq, true); return; }
       v.shead.innerHTML = '';
       v.shead.appendChild(el('span', { text: '“' + srch.q + '”的搜索结果' }));
       // 全局搜索：在全部电影和剧集里按片名找，不带分类、类型、地区等筛选条件
       v.shead.appendChild(el('span', { class: 'ff-dim', text: '全部电影和剧集' + (r.totalResults ? ' · 约 ' + r.totalResults + ' 条' : '') + '，不受筛选条件影响' }));
       v.shead.appendChild(el('button', { class: 'ff-btn ff-ghost', text: '返回榜单', onclick: function () { page.input.value = ''; page.searchBox.classList.remove('ff-has-text'); endSearch(); } }));
-      r.items.forEach(function (i) { v.sgrid.appendChild(card(i, true)); });
+      fullRows(v.sgrid, srch.pending, hasMore).forEach(function (i) { v.sgrid.appendChild(card(i, true)); });
       v.smore.innerHTML = '';
-      if (!v.sgrid.children.length) emptyState(v.smore, 'search_off', '没有找到“' + srch.q + '”，换个片名或用原名试试');
+      if (!v.sgrid.children.length && !srch.pending.length) emptyState(v.smore, 'search_off', '没有找到“' + srch.q + '”，换个片名或用原名试试');
       else if (srch.page < srch.totalPages) v.smore.appendChild(el('button', { class: 'ff-btn ff-ghost', text: '加载更多', onclick: loadMoreSearch }));
       else v.smore.appendChild(el('div', { class: 'ff-msg ff-dim', text: '已经到底了' }));
     }).catch(function (e) {
       if (seq !== srch.seq) return;
       srch.loading = false;
+      fullRows(v.sgrid, srch.pending || [], false).forEach(function (i) { v.sgrid.appendChild(card(i, true)); });
       message(v.smore, e.message, 'ff-error');
     });
   }
@@ -761,10 +766,27 @@
     return 'discover?' + q.join('&');
   }
 
+  // TMDb 一页 20 条，网格每行的列数随窗口宽度变化，20 往往填不满最后一行。
+  // 每次只渲染能排成整行的部分，剩下的留到下一次；缺口还在且有下一页时先多取一页再渲染。
+  function gridColumns(grid) {
+    var cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length;
+    return Math.max(1, cols || 1);
+  }
+  function fullRows(grid, pending, hasMore) {
+    if (!hasMore) return pending.splice(0, pending.length);
+    var cols = gridColumns(grid);
+    var count = Math.floor((grid.children.length + pending.length) / cols) * cols - grid.children.length;
+    return pending.splice(0, Math.max(0, count));
+  }
+  function needsTopUp(grid, pending, hasMore) {
+    return hasMore && (grid.children.length + pending.length) % gridColumns(grid) !== 0;
+  }
+
   var hotSeq = 0;
   function reload() {
     hot.state.page = 1;
     hot.totalPages = 1;
+    hot.pending = [];
     hot.view.grid.innerHTML = '';
     fetchPage(1, ++hotSeq);
   }
@@ -773,24 +795,30 @@
     fetchPage(hot.state.page + 1, hotSeq);
   }
 
-  function fetchPage(pageNo, seq) {
+  function fetchPage(pageNo, seq, toppingUp) {
     var more = hot.view.more;
+    var grid = hot.view.grid;
     hot.loading = true;
     more.innerHTML = '';
     more.appendChild(el('div', { class: 'ff-msg', text: '加载中…' }));
     api('GET', query(pageNo)).then(function (r) {
       if (seq !== hotSeq) return;
-      hot.loading = false;
       hot.state.page = r.page || pageNo;
       hot.totalPages = r.totalPages || 1;
-      r.items.forEach(function (i) { hot.view.grid.appendChild(card(i)); });
+      hot.pending = (hot.pending || []).concat(r.items);
+      var hasMore = hot.state.page < hot.totalPages;
+      if (!toppingUp && needsTopUp(grid, hot.pending, hasMore)) { fetchPage(hot.state.page + 1, seq, true); return; }
+      hot.loading = false;
+      fullRows(grid, hot.pending, hasMore).forEach(function (i) { grid.appendChild(card(i)); });
       more.innerHTML = '';
-      if (!hot.view.grid.children.length) more.appendChild(el('div', { class: 'ff-msg', text: '没有符合条件的影片，换个筛选试试' }));
+      if (!grid.children.length && !hot.pending.length) more.appendChild(el('div', { class: 'ff-msg', text: '没有符合条件的影片，换个筛选试试' }));
       else if (hot.state.page < hot.totalPages) more.appendChild(el('button', { class: 'ff-btn ff-ghost', text: '加载更多', onclick: loadMore }));
       else more.appendChild(el('div', { class: 'ff-msg ff-dim', text: '已经到底了' }));
     }).catch(function (e) {
       if (seq !== hotSeq) return;
       hot.loading = false;
+      // 补页失败时，已经取到的先显示出来
+      fullRows(grid, hot.pending || [], false).forEach(function (i) { grid.appendChild(card(i)); });
       message(more, e.message, 'ff-error');
     });
   }
