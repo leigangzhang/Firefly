@@ -33,7 +33,7 @@ public sealed class JellyfinMediaHost : IMediaHost
 
     public void RequestRefresh() => _library.QueueLibraryScan();
 
-    public bool Contains(MediaQuery query)
+    public string? FindItemId(MediaQuery query)
     {
         var kind = query.Kind == MediaKind.Movie ? BaseItemKind.Movie : BaseItemKind.Series;
         if (!string.IsNullOrEmpty(query.TmdbId))
@@ -47,7 +47,7 @@ public sealed class JellyfinMediaHost : IMediaHost
             });
             if (byId.Count > 0)
             {
-                return true;
+                return byId[0].Id.ToString("N");
             }
         }
 
@@ -58,7 +58,7 @@ public sealed class JellyfinMediaHost : IMediaHost
             Years = query.Year is int y ? new[] { y } : Array.Empty<int>(),
             Recursive = true,
             Limit = 1,
-        }).Count > 0;
+        }).FirstOrDefault()?.Id.ToString("N");
     }
 
     private string? FirstLocation(CollectionTypeOptions type) =>

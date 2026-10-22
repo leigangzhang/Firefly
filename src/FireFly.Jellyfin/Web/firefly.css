@@ -55,6 +55,7 @@
 .ff-score-label{font-weight:600;margin-right:6px}
 .ff-fav-on{color:#ff5a7a;border-color:#ff5a7a}
 .ff-in-static{background:#4caf50;color:#fff}
+.ff-in-static:hover{background:#43a047}
 .ff-tagline{font-style:italic;color:#aab0b8}
 .ff-crew{display:flex;flex-wrap:wrap;gap:16px 40px;margin-top:6px}
 .ff-crew-name{font-weight:600}

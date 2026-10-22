@@ -11,7 +11,8 @@ public interface IMediaHost
 
     void RequestRefresh();
 
-    bool Contains(MediaQuery query);
+    /// <summary>库里对应条目的 id，不在库时为 null；详情页"已在库"按钮靠它跳过去。</summary>
+    string? FindItemId(MediaQuery query);
 }
 
 /// <summary>按 Jellyfin / Emby / Plex 通用的命名规范生成落点。</summary>
