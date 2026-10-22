@@ -264,7 +264,8 @@
               return;
             }
             if (o.value) hot.state[row.key] = o.value; else delete hot.state[row.key];
-            if (isCat) { hot.state = { category: o.value, sort: DEFAULT_SORT, region: hot.state.region, time: hot.state.time }; loadFilters(); return; }
+            // 换分类后所有筛选项回到默认：排序回到"最热"，地区、年代等回到"全部"
+            if (isCat) { hot.state = { category: o.value, sort: DEFAULT_SORT }; loadFilters(); return; }
             renderFilters();
             reload();
           },
