@@ -71,6 +71,13 @@
 .ff-trailer-cover:hover .ff-play{background:#f5b301;color:#111;border-color:#f5b301}
 .ff-vids{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
 .ff-cast{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px}
+.ff-recs-wrap{position:relative}
+.ff-recs{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:10px;scrollbar-width:thin}
+.ff-recs .ff-card{flex:0 0 160px;min-width:0;scroll-snap-align:start}
+.ff-recs-nav{position:absolute;top:calc((160px * 1.5) / 2 - 20px);width:40px;height:40px;border-radius:50%;border:0;background:rgba(0,0,0,.7);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.ff-recs-nav[hidden]{display:none}
+.ff-recs-nav:hover{background:#f5b301;color:#111}
+.ff-recs-left{left:-12px}.ff-recs-right{right:-12px}
 .ff-person{flex:0 0 130px;background:#181a1f;border-radius:8px;overflow:hidden;padding-bottom:8px}
 .ff-person img,.ff-noface{width:130px;height:175px;object-fit:cover;display:block;background:#2a2e36}
 .ff-noface{display:flex;align-items:center;justify-content:center;font-size:2.4em;color:#555}

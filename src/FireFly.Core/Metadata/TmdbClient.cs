@@ -107,9 +107,8 @@ public sealed class TmdbClient
     private static readonly TimeSpan GenreTtl = TimeSpan.FromHours(24);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     /// <summary>网络请求失败时，落盘缓存里不超过这个时间的旧数据仍然拿来用。</summary>
-    // 同类推荐：recommendations 少于这个数时用 similar 补齐，最多展示 Max 部
-    private const int MinRecommendations = 12;
-    private const int MaxRecommendations = 20;
+    // 同类推荐展示的数量；recommendations 不够时用 similar 补齐
+    private const int RecommendationCount = 12;
     private static readonly TimeSpan StaleLimit = TimeSpan.FromDays(30);
     private static readonly string[] ImageSizes = { "w92", "w185", "w342", "w500", "w780", "w1280", "original" };
     private static readonly System.Text.RegularExpressions.Regex ImageFile = new(@"^[A-Za-z0-9_-]{1,128}\.(jpg|jpeg|png|svg|webp)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -537,7 +536,7 @@ public sealed class TmdbClient
             : Enumerable.Empty<TmdbItem>();
 
         var list = Results("recommendations").ToList();
-        if (list.Count < MinRecommendations)
+        if (list.Count < RecommendationCount)
         {
             list.AddRange(Results("similar"));
         }
@@ -546,7 +545,7 @@ public sealed class TmdbClient
             .Where(i => i.TmdbId != self)
             .GroupBy(i => i.TmdbId)
             .Select(g => g.First())
-            .Take(MaxRecommendations)
+            .Take(RecommendationCount)
             .ToList();
     }
 

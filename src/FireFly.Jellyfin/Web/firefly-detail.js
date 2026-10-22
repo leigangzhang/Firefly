@@ -125,11 +125,9 @@
     // 4. 分季：默认只显示当前季，"查看全部季"在下方展开其余各季
     if (isTv && d.seasons.length) main.appendChild(seasonSection(d));
 
-    // 5. 同类推荐：卡片和榜单一样，点进去是对应详情页
+    // 5. 同类推荐：卡片和榜单一样，单行左右滑动，点进去是对应详情页
     var recs = meta.recommendations || [];
-    if (recs.length) {
-      main.appendChild(section(T('同类推荐'), el('div', { class: 'ff-grid ff-hot-grid ff-recs' }, recs.map(function (i) { return F.card(i, false, meta.genres); }))));
-    }
+    if (recs.length) main.appendChild(section(T('同类推荐'), recRow(recs, meta.genres)));
 
     // 右侧栏（跟随 TMDb 语言）
     var p = d.providers;
@@ -217,6 +215,25 @@
         foot,
       ]),
     ]);
+  }
+
+  // 单行横向滚动；鼠标用户没有横向滚轮，两侧给翻页按钮，滚到头的一侧隐藏
+  function recRow(items, genres) {
+    var row = el('div', { class: 'ff-recs' }, items.map(function (i) { return F.card(i, false, genres); }));
+    function nav(dir, name, label) {
+      return el('button', { class: 'ff-recs-nav ff-recs-' + name, 'aria-label': T(label), onclick: function () {
+        row.scrollBy({ left: dir * row.clientWidth * 0.8, behavior: 'smooth' });
+      } }, [el('span', { class: 'material-icons', text: 'chevron_' + name, 'aria-hidden': 'true' })]);
+    }
+    var prev = nav(-1, 'left', '上一页'), next = nav(1, 'right', '下一页');
+    function paint() {
+      prev.hidden = row.scrollLeft <= 0;
+      next.hidden = row.scrollLeft + row.clientWidth >= row.scrollWidth - 1;
+    }
+    row.addEventListener('scroll', paint, { passive: true });
+    // 挂到页面上、窗口宽度变了都要重算；跟着节点走，离开详情页不留监听
+    if (window.ResizeObserver) new ResizeObserver(paint).observe(row); else requestAnimationFrame(paint);
+    return el('div', { class: 'ff-recs-wrap' }, [row, prev, next]);
   }
 
   function section(title) {

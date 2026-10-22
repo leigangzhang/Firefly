@@ -1141,7 +1141,7 @@ public class DiscoverTests
         var json = """{"id":999,"title":"本片","recommendations":{"results":[""" + recs + """]},"similar":{"results":[{"id":500,"title":"相似"}]}}""";
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         var d = TmdbClient.ParseDetail(MediaKind.Movie, doc.RootElement, new[] { "CN" });
-        Assert.Equal(20, d.Recommendations!.Count);
+        Assert.Equal(12, d.Recommendations!.Count);
         Assert.DoesNotContain(d.Recommendations!, i => i.TmdbId == "500");
     }
 }
