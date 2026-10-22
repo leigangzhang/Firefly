@@ -76,14 +76,25 @@ public sealed class MacThunderDownloader : IDownloader
             .Where(f => f.LastWriteTimeUtc >= since.UtcDateTime || f.CreationTimeUtc >= since.UtcDateTime)
             .ToList();
 
-        var expected = task.Release.Files
-            .Where(f => rules.IsVideo(f.Path) && f.Size >= rules.MinVideoBytes)
-            .ToList();
+        var expected = Videos(task.Release.Files, rules);
+        if (expected.Count > 0)
+        {
+            return ProbeByFileList(expected, files, rules);
+        }
 
-        return expected.Count > 0
-            ? ProbeByFileList(expected, files, rules)
-            : ProbeByReleaseName(task.Release, files, rules);
+        // 资源站没给文件清单时，先按种子哈希找迅雷的任务文件夹，用里面的种子当清单
+        if (ThunderTaskFolder.Find(dir, task.Release.InfoHash) is { } folder
+            && Videos(ThunderTaskFolder.ReadTorrentFiles(folder), rules) is { Count: > 0 } fromTorrent)
+        {
+            var inFolder = SafeEnumerate(folder).Select(p => new FileInfo(p)).ToList();
+            return ProbeByFileList(fromTorrent, inFolder, rules);
+        }
+
+        return ProbeByReleaseName(task.Release, files, rules);
     }
+
+    private static List<ReleaseFile> Videos(IEnumerable<ReleaseFile> files, RulesDocument rules) =>
+        files.Where(f => rules.IsVideo(f.Path) && f.Size >= rules.MinVideoBytes).ToList();
 
     /// <summary>有文件清单：按文件名逐个找。正式文件名存在、大小到位、旁边没有临时文件，才算这一集完成。</summary>
     internal static DownloadProgress ProbeByFileList(IReadOnlyList<ReleaseFile> expected, IReadOnlyList<FileInfo> files, RulesDocument rules)
@@ -122,12 +133,13 @@ public sealed class MacThunderDownloader : IDownloader
     /// <summary>没有文件清单：找与种子同名的文件夹或文件，里面的视频文件就是目标。</summary>
     internal static DownloadProgress ProbeByReleaseName(Release release, IReadOnlyList<FileInfo> files, RulesDocument rules)
     {
-        // 迅雷可能用种子里的原名，也可能用磁力里的显示名建目录，两个都认
+        // 迅雷可能用种子里的原名，也可能用磁力里的显示名建目录，两个都认。
+        // 比较时去掉空白：网页站点抓到的标题常在标签边界多出空格，迅雷的目录名里没有
         var names = new[] { release.Name, release.DisplayName }
             .Where(n => !string.IsNullOrWhiteSpace(n))
-            .Select(n => Path.DirectorySeparatorChar + n!.Trim())
+            .Select(n => Path.DirectorySeparatorChar + StripWhitespace(n!))
             .ToList();
-        var related = files.Where(f => names.Any(n => f.FullName.Contains(n, StringComparison.Ordinal))).ToList();
+        var related = files.Where(f => names.Any(n => StripWhitespace(f.FullName).Contains(n, StringComparison.Ordinal))).ToList();
         var hasTemp = related.Any(f => rules.Thunder.TempSuffixes.Any(s => f.Name.EndsWith(s, StringComparison.OrdinalIgnoreCase)));
         var videos = related.Where(f => rules.IsVideo(f.Name) && f.Length >= rules.MinVideoBytes).ToList();
         var done = related.Sum(f => f.Length);
@@ -135,6 +147,8 @@ public sealed class MacThunderDownloader : IDownloader
         var complete = !hasTemp && videos.Count > 0 && done >= release.SizeBytes;
         return new DownloadProgress(done, total, complete, complete ? videos.Select(v => v.FullName).ToList() : Array.Empty<string>());
     }
+
+    private static string StripWhitespace(string s) => string.Concat(s.Where(c => !char.IsWhiteSpace(c)));
 
     private static long ExpectedTotal(Release r) => r.Files.Count > 0 ? r.Files.Sum(f => f.Size) : r.SizeBytes;
 

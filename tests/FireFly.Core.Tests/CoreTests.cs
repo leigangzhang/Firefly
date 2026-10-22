@@ -597,6 +597,44 @@ public class DownloadTests
         Assert.False(downloader.Probe(new DownloadTask { Release = Movie }).Complete);
     }
 
+    [Fact]
+    public void ProbeByNameIgnoresExtraSpacesFromHtmlTitle()
+    {
+        using var dir = new TempDir();
+        var video = dir.File(System.IO.Path.Combine("【高清剧集网发布 www.PTHDTV.com】超能路人甲[全8集].S01", "e1.mkv"), 100 * Mb);
+        var release = Movie with { Files = Array.Empty<ReleaseFile>(), SizeBytes = 100 * Mb, Name = "【高清剧集网 发布 www.PTHDTV.com】超能路人甲 [全8集].S01" };
+        Assert.True(MacThunderDownloader.ProbeByReleaseName(release, new[] { new FileInfo(video) }, Rules).Complete);
+    }
+
+    [Fact]
+    public void ProbeFindsThunderFolderByHashAndUsesItsTorrent()
+    {
+        using var dir = new TempDir();
+        const string folder = "Show.S01.1080p";
+        var torrent = "d4:infod5:filesl"
+            + "d6:lengthi" + (100 * Mb) + "e4:pathl10:S01E01.mkveed6:lengthi" + (120 * Mb) + "e4:pathl10:S01E02.mkvee"
+            + "d6:lengthi5e4:pathl7:ad.pngee"
+            + "e4:name" + folder.Length + ":" + folder + "ee";
+        System.IO.File.WriteAllText(System.IO.Path.Combine(Directory.CreateDirectory(System.IO.Path.Combine(dir.Path, folder)).FullName, ".magent_X.torrent"), torrent);
+        dir.File(System.IO.Path.Combine(folder, ".ABCDEF.js"), 10);
+        dir.File(System.IO.Path.Combine(folder, "S01E01.mkv"), 100 * Mb);
+
+        // 网页站点抓到的名字和大小都不对，只有哈希可靠
+        var release = Movie with { InfoHash = "abcdef", Name = "Show .S01 .1080p", SizeBytes = 2969, Files = Array.Empty<ReleaseFile>() };
+        var downloader = new MacThunderDownloader(() => dir.Path, () => Rules, (_, _) => Task.FromResult(0), (_, _) => Task.CompletedTask);
+        var task = new DownloadTask { Release = release, SubmittedAt = DateTimeOffset.UtcNow };
+
+        var partial = downloader.Probe(task);
+        Assert.Equal(100 * Mb, partial.BytesDone);
+        Assert.Equal(220 * Mb, partial.BytesTotal);
+        Assert.False(partial.Complete);
+
+        dir.File(System.IO.Path.Combine(folder, "S01E02.mkv"), 120 * Mb);
+        var done = downloader.Probe(task);
+        Assert.True(done.Complete);
+        Assert.Equal(2, done.CompletedFiles.Count);
+    }
+
     private sealed class FakeHost : IMediaHost
     {
         public FakeHost(string movies, string series) => Paths = new LibraryPaths(movies, series);

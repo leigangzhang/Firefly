@@ -87,6 +87,7 @@ public class HtmlSiteTests
             """);
         Assert.Equal(2, MiniHtml.QueryAll(doc, "div#m p").Count);
         Assert.Equal("two bold", MiniHtml.QueryAll(doc, "p")[1].Text);
+        Assert.Equal("【高清剧集网发布】超能路人甲[全8集]", MiniHtml.Parse("<a>【高清剧集网<span>发布</span>】<em>超能路人甲</em>[全8集]</a>").Elements.First().Text);
         Assert.Equal("bold", MiniHtml.Value(doc, "div.a.b > p b"));
         Assert.Equal(2, MiniHtml.QueryAll(doc, "ul > li").Count);
         Assert.Equal("y", MiniHtml.Value(doc, "li.y"));

@@ -75,7 +75,8 @@ public sealed class HtmlNode
             Collect(c, sb);
         }
 
-        if (node.Tag is "td" or "th" or "span" or "a" or "p" or "div" or "li")
+        // span、a 是行内元素，浏览器不在它们边界加空格；加了会把高亮的关键词和标题拆开（"超能路人甲 [全8集]"）
+        if (node.Tag is "td" or "th" or "p" or "div" or "li")
         {
             sb.Append(' ');
         }
