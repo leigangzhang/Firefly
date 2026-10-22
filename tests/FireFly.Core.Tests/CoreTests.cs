@@ -647,7 +647,7 @@ public class DownloadTests
 
         public void RequestRefresh() => Refreshes++;
 
-        public bool Contains(MediaQuery query) => false;
+        public string? FindItemId(MediaQuery query) => null;
     }
 
     [Fact]
@@ -1112,6 +1112,37 @@ public class DiscoverTests
         Assert.Equal("季简介", d.Seasons[0].Overview);
         Assert.Equal(1, d.CurrentSeason);
         Assert.Null(d.Providers);
+        Assert.Empty(d.Recommendations!);
+    }
+
+    [Fact]
+    public void RecommendationsFallBackToSimilar()
+    {
+        const string json = """
+        {"id":100,"name":"本剧",
+         "recommendations":{"results":[{"id":1,"name":"推荐一","first_air_date":"2020-01-01","poster_path":"/a.jpg","vote_average":8.1,"genre_ids":[18]},{"id":100,"name":"本剧"}]},
+         "similar":{"results":[{"id":1,"name":"推荐一"},{"id":2,"name":"相似二","original_name":"Similar Two"}]}}
+        """;
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var d = TmdbClient.ParseDetail(MediaKind.Series, doc.RootElement, new[] { "CN" });
+        Assert.Equal(new[] { "1", "2" }, d.Recommendations!.Select(i => i.TmdbId));
+        var first = d.Recommendations![0];
+        Assert.Equal(MediaKind.Series, first.Kind);
+        Assert.Equal(2020, first.Year);
+        Assert.Equal("https://image.tmdb.org/t/p/w342/a.jpg", first.PosterUrl);
+        Assert.Equal(new[] { 18 }, first.GenreIds);
+        Assert.Equal("Similar Two", d.Recommendations![1].OriginalTitle);
+    }
+
+    [Fact]
+    public void EnoughRecommendationsSkipSimilar()
+    {
+        var recs = string.Join(",", Enumerable.Range(1, 25).Select(n => $$"""{"id":{{n}},"title":"片{{n}}"}"""));
+        var json = """{"id":999,"title":"本片","recommendations":{"results":[""" + recs + """]},"similar":{"results":[{"id":500,"title":"相似"}]}}""";
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var d = TmdbClient.ParseDetail(MediaKind.Movie, doc.RootElement, new[] { "CN" });
+        Assert.Equal(20, d.Recommendations!.Count);
+        Assert.DoesNotContain(d.Recommendations!, i => i.TmdbId == "500");
     }
 }
 

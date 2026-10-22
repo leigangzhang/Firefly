@@ -64,7 +64,10 @@
           el('div', { class: 'ff-actions' }, [
             scoreRing(d.rating), el('span', { class: 'ff-score-label', text: d.voteCount ? T('用户评分（{n}人）', { n: d.voteCount }) : T('用户评分') }),
             favBtn, download, trailerBtn,
-            meta.inLibrary ? el('span', { class: 'ff-chip ff-in-static', text: T('已在库') }) : null,
+            meta.libraryItemId ? el('button', { class: 'ff-btn ff-in-static', onclick: function () {
+              F.closePage();
+              location.hash = '#/details?id=' + meta.libraryItemId + '&serverId=' + encodeURIComponent(window.ApiClient.serverId());
+            } }, [T('已在库'), el('span', { class: 'material-icons', text: 'chevron_right', 'aria-hidden': 'true' })]) : null,
           ]),
           d.tagline ? el('div', { class: 'ff-tagline', text: d.tagline }) : null,
           d.directors.length ? el('div', { class: 'ff-crew' }, d.directors.map(function (p) {
@@ -121,6 +124,12 @@
 
     // 4. 分季：默认只显示当前季，"查看全部季"在下方展开其余各季
     if (isTv && d.seasons.length) main.appendChild(seasonSection(d));
+
+    // 5. 同类推荐：卡片和榜单一样，点进去是对应详情页
+    var recs = meta.recommendations || [];
+    if (recs.length) {
+      main.appendChild(section(T('同类推荐'), el('div', { class: 'ff-grid ff-hot-grid ff-recs' }, recs.map(function (i) { return F.card(i, false, meta.genres); }))));
+    }
 
     // 右侧栏（跟随 TMDb 语言）
     var p = d.providers;

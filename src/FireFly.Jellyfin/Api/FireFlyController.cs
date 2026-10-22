@@ -280,10 +280,36 @@ public sealed class FireFlyController : ControllerBase
                 return ApiJson(new { error = "TMDb 没有这个条目" }, StatusCodes.Status404NotFound);
             }
 
+            // 同类推荐单独返回，带上"已在库"和类型名，卡片和榜单一个样
+            IReadOnlyList<FireFly.Core.Rules.FilterOption> genres;
+            try
+            {
+                genres = await _runtime.Tmdb.GenresAsync(mediaKind, ct).ConfigureAwait(false);
+            }
+            catch (HttpRequestException)
+            {
+                genres = Array.Empty<FireFly.Core.Rules.FilterOption>();
+            }
+
+            var libraryItemId = LibraryItemId(mediaKind, detail.TmdbId, detail.Title, detail.Year);
             return ApiJson(new
             {
-                detail,
-                inLibrary = InLibrary(mediaKind, detail.TmdbId, detail.Title, detail.Year),
+                detail = detail with { Recommendations = null },
+                recommendations = (detail.Recommendations ?? Array.Empty<TmdbItem>()).Select(i => new
+                {
+                    i.TmdbId,
+                    kind = i.Kind,
+                    i.Title,
+                    i.OriginalTitle,
+                    i.Year,
+                    i.PosterUrl,
+                    i.Rating,
+                    i.GenreIds,
+                    inLibrary = InLibrary(i.Kind, i.TmdbId, i.Title, i.Year),
+                }),
+                genres = genres.ToDictionary(g => g.Value, g => g.Label),
+                libraryItemId,
+                inLibrary = libraryItemId is not null,
                 favorite = _runtime.Favorites.Contains(mediaKind, detail.TmdbId),
                 showTrailers = _runtime.ShowTrailers,
                 language = _runtime.TmdbLanguage,
@@ -546,7 +572,10 @@ public sealed class FireFlyController : ControllerBase
     }
 
     private bool InLibrary(MediaKind kind, string tmdbId, string title, int? year) =>
-        _runtime.Host.Contains(new MediaQuery { Kind = kind, Title = title, Year = year, TmdbId = tmdbId });
+        LibraryItemId(kind, tmdbId, title, year) is not null;
+
+    private string? LibraryItemId(MediaKind kind, string tmdbId, string title, int? year) =>
+        _runtime.Host.FindItemId(new MediaQuery { Kind = kind, Title = title, Year = year, TmdbId = tmdbId });
 
     private static MediaKind ParseKind(string kind) =>
         kind is "tv" or "Series" or "series" ? MediaKind.Series : MediaKind.Movie;

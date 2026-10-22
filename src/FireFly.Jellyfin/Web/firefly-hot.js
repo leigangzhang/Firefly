@@ -346,9 +346,11 @@
     return el('span', { class: 'ff-rate ' + cls, text: Number(rating).toFixed(1) });
   }
 
-  function card(i, mixed) {
+  // genreNames：类型 ID → 名称；不传时用当前分类的类型表（详情页的同类推荐会传自己那一类的）
+  function card(i, mixed, genreNames) {
     // 搜索结果电影、剧集混排：副标题标出类型，不用当前分类的类型表
-    var genres = mixed ? [i.kind === 'Series' ? T('剧集|单部') : T('电影|单部')] : (i.genreIds || []).map(function (g) { return hot.genres[g]; }).filter(Boolean).slice(0, 2);
+    var names = genreNames || hot.genres;
+    var genres = mixed ? [i.kind === 'Series' ? T('剧集|单部') : T('电影|单部')] : (i.genreIds || []).map(function (g) { return names[g]; }).filter(Boolean).slice(0, 2);
     var sub = [i.year, genres.join(' / ')].filter(Boolean).join(' · ');
     return el('div', { class: 'ff-card', onclick: function () { openDetail(i.kind, i.tmdbId); } }, [
       el('div', { class: 'ff-poster' }, [
@@ -411,6 +413,8 @@
     }).catch(function (e) { message(body, e.message, 'ff-error'); });
   }
 
+  F.card = card;
+  F.closePage = closePage;
   F.displayName = displayName;
   F.enter = enter;
   F.openHot = openHot;

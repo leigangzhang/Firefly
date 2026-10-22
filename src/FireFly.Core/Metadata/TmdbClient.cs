@@ -77,7 +77,8 @@ public sealed record TmdbDetail(
     TmdbWatchProviders? Providers,
     IReadOnlyList<TmdbSeason> Seasons,
     int? CurrentSeason = null,
-    IReadOnlyList<int>? GenreIds = null);
+    IReadOnlyList<int>? GenreIds = null,
+    IReadOnlyList<TmdbItem>? Recommendations = null);
 
 /// <summary>TMDb 连接设置。ApiBase / ImageBase 为空时用默认入口；入口被屏蔽时在配置页改成可用的地址。</summary>
 public sealed record TmdbSettings(string ApiKey, string Language, string? ApiBase = null, string? ImageBase = null)
@@ -106,6 +107,9 @@ public sealed class TmdbClient
     private static readonly TimeSpan GenreTtl = TimeSpan.FromHours(24);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     /// <summary>网络请求失败时，落盘缓存里不超过这个时间的旧数据仍然拿来用。</summary>
+    // 同类推荐：recommendations 少于这个数时用 similar 补齐，最多展示 Max 部
+    private const int MinRecommendations = 12;
+    private const int MaxRecommendations = 20;
     private static readonly TimeSpan StaleLimit = TimeSpan.FromDays(30);
     private static readonly string[] ImageSizes = { "w92", "w185", "w342", "w500", "w780", "w1280", "original" };
     private static readonly System.Text.RegularExpressions.Regex ImageFile = new(@"^[A-Za-z0-9_-]{1,128}\.(jpg|jpeg|png|svg|webp)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -261,12 +265,12 @@ public sealed class TmdbClient
         return r?.ToItem(kind, Images);
     }
 
-    /// <summary>详情页：基本信息 + 预告片 + 演职员 + 分级 + 播放平台。</summary>
+    /// <summary>详情页：基本信息 + 预告片 + 演职员 + 分级 + 播放平台 + 同类推荐。</summary>
     public async Task<TmdbDetail?> FullDetailAsync(MediaKind kind, string tmdbId, IReadOnlyList<string> watchRegions, CancellationToken ct)
     {
         var append = kind == MediaKind.Movie
-            ? "videos,credits,release_dates,watch/providers"
-            : "videos,aggregate_credits,content_ratings,watch/providers";
+            ? "videos,credits,release_dates,watch/providers,recommendations,similar"
+            : "videos,aggregate_credits,content_ratings,watch/providers,recommendations,similar";
         var json = await GetJsonAsync(
             $"/{Segment(kind)}/{Uri.EscapeDataString(tmdbId)}",
             new Dictionary<string, string> { ["append_to_response"] = append, ["include_video_language"] = "zh,en,null" },
@@ -520,7 +524,30 @@ public sealed class TmdbClient
                     se.TryGetProperty("vote_average", out var sv) && sv.ValueKind == JsonValueKind.Number && sv.GetDouble() > 0 ? sv.GetDouble() : null))
                 .ToList(),
             movie ? null : CurrentSeason(r, today ?? DateOnly.FromDateTime(DateTime.Now)),
-            Arr(r, "genres").Select(g => Int(g, "id")).OfType<int>().ToList());
+            Arr(r, "genres").Select(g => Int(g, "id")).OfType<int>().ToList(),
+            Recommendations(kind, r, images));
+    }
+
+    /// <summary>同类推荐：先取 TMDb 的 recommendations（按用户行为），不够时用 similar（按类型和关键词）补齐，去重并排除自己。</summary>
+    private static List<TmdbItem> Recommendations(MediaKind kind, JsonElement r, string images)
+    {
+        var self = Int(r, "id")?.ToString(CultureInfo.InvariantCulture);
+        IEnumerable<TmdbItem> Results(string name) => r.TryGetProperty(name, out var section) && section.ValueKind == JsonValueKind.Object
+            ? (section.Deserialize<TmdbPage>(JsonOptions)?.Results ?? new()).Select(x => x.ToItem(kind, images))
+            : Enumerable.Empty<TmdbItem>();
+
+        var list = Results("recommendations").ToList();
+        if (list.Count < MinRecommendations)
+        {
+            list.AddRange(Results("similar"));
+        }
+
+        return list
+            .Where(i => i.TmdbId != self)
+            .GroupBy(i => i.TmdbId)
+            .Select(g => g.First())
+            .Take(MaxRecommendations)
+            .ToList();
     }
 
     /// <summary>当前季：最近播出那一集所在的季；没有时取已开播的最大季，再没有取第 1 季。</summary>
