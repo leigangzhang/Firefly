@@ -17,8 +17,6 @@ public static class SourceFactory
 {
     public const string JsonApi = "jsonApi";
 
-    public const string Torznab = "torznab";
-
     public const string Html = "html";
 
     /// <summary>按规则建搜索源；类型不认识的源跳过，并记进 rules.Warnings。</summary>
@@ -69,10 +67,10 @@ public static class SourceFactory
             return true;
         }
 
-        if (string.Equals(rule.Kind, Torznab, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rule.Kind, "torznab", StringComparison.OrdinalIgnoreCase))
         {
-            source = new TorznabSource(rule, http);
-            return true;
+            problem = $"搜索源 {rule.Name} 是 Torznab（Jackett / Prowlarr）类型，插件已不再支持，已跳过；可以在配置页删除它";
+            return false;
         }
 
         if (string.Equals(rule.Kind, Html, StringComparison.OrdinalIgnoreCase))
@@ -201,8 +199,8 @@ public sealed class JsonApiSource : IResourceSource
         var rawHash = (Text(Find(item, fields.InfoHash)) ?? string.Empty).Trim();
         var magnet = Text(Find(item, fields.Magnet));
         // 有的站没有单独的 hash 字段，只给磁力链接；Base32 的 hash 也统一成十六进制
-        var hash = TorznabSource.Normalize(rawHash.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase) ? TorznabSource.HashFromMagnet(rawHash) : rawHash)
-            ?? TorznabSource.Normalize(TorznabSource.HashFromMagnet(magnet))
+        var hash = InfoHash.Normalize(rawHash.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase) ? InfoHash.FromMagnet(rawHash) : rawHash)
+            ?? InfoHash.Normalize(InfoHash.FromMagnet(magnet))
             ?? rawHash.ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(magnet) && rawHash.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
         {

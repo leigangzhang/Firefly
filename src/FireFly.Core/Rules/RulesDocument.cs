@@ -97,14 +97,11 @@ public sealed class SourceRule
 {
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>用哪段代码请求和解析，不是站点名：jsonApi、torznab 或 html。</summary>
+    /// <summary>用哪段代码请求和解析，不是站点名：jsonApi 或 html。</summary>
     public string Kind { get; set; } = string.Empty;
 
     /// <summary>这个站点负责的资源类型（movie / tv / anime / variety / documentary，即 discover.categories 的 key）；空 = 全部。</summary>
     public List<string> Types { get; set; } = new();
-
-    /// <summary>torznab 的 API Key（Jackett / Prowlarr）。</summary>
-    public string? ApiKey { get; set; }
 
     /// <summary>同一个源的多个镜像地址，按顺序尝试，上次成功的排到最前。站点换域名时改这里。</summary>
     public List<string> Endpoints { get; set; } = new();

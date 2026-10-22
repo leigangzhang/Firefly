@@ -112,7 +112,7 @@ public sealed partial class HtmlSource : IResourceSource
     internal static Release? ToRelease(string source, string magnetOrHash, string title, long size, DateTimeOffset? date)
     {
         var isMagnet = magnetOrHash.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase);
-        var hash = TorznabSource.Normalize(isMagnet ? TorznabSource.HashFromMagnet(magnetOrHash) : magnetOrHash);
+        var hash = InfoHash.Normalize(isMagnet ? InfoHash.FromMagnet(magnetOrHash) : magnetOrHash);
         if (hash is null)
         {
             return null;

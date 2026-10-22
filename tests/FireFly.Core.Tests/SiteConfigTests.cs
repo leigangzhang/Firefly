@@ -73,7 +73,7 @@ public class SiteConfigTests
     [Fact]
     public void SourceOrderReordersSources()
     {
-        var rules = RulesLoader.Merge(Base, """{"sourceOrder":["b"],"sources":[{"name":"c","kind":"torznab","endpoints":["http://j"]}]}""");
+        var rules = RulesLoader.Merge(Base, """{"sourceOrder":["b"],"sources":[{"name":"c","kind":"html","endpoints":["http://j/s?q={keyword}"],"html":{"item":"li"}}]}""");
         Assert.Equal(new[] { "b", "a", "c" }, rules.Sources.Select(s => s.Name));
     }
 
@@ -157,45 +157,19 @@ public class SiteConfigTests
     }
 
     [Fact]
-    public void TorznabFeedParsesInfohashAndMagnet()
+    public void Base32HashesAreNormalised()
     {
-        const string xml = """
-            <?xml version="1.0" encoding="UTF-8"?>
-            <rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
-              <channel>
-                <item>
-                  <title>流浪地球2.2023.2160p.WEB-DL</title>
-                  <size>19971597926</size>
-                  <pubDate>Wed, 05 Apr 2023 08:12:00 +0000</pubDate>
-                  <link>http://jackett/dl/1.torrent</link>
-                  <torznab:attr name="infohash" value="0123456789abcdef0123456789abcdef01234567" />
-                </item>
-                <item>
-                  <title>流浪地球.2019.1080p</title>
-                  <link>magnet:?xt=urn:btih:AAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQT&amp;dn=x</link>
-                </item>
-                <item><title>只有种子文件</title><link>http://jackett/dl/3.torrent</link></item>
-              </channel>
-            </rss>
-            """;
-        var list = TorznabSource.ParseFeed("j", xml, out var raw);
-        Assert.Equal(3, raw);
-        Assert.Equal(2, list.Count);
-        Assert.Equal("0123456789ABCDEF0123456789ABCDEF01234567", list[0].InfoHash);
-        Assert.Equal(19971597926, list[0].SizeBytes);
-        Assert.Equal(2023, list[0].CreatedAt!.Value.Year);
-        Assert.Equal("000102030405060708090A0B0C0D0E0F10111213", list[1].InfoHash);
-        Assert.StartsWith("magnet:", list[1].Magnet);
+        Assert.Equal("000102030405060708090A0B0C0D0E0F10111213", InfoHash.Normalize(InfoHash.FromMagnet("magnet:?xt=urn:btih:AAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQT&dn=x")));
+        Assert.Equal("0123456789ABCDEF0123456789ABCDEF01234567", InfoHash.Normalize("0123456789abcdef0123456789abcdef01234567"));
+        Assert.Null(InfoHash.Normalize("not-a-hash"));
     }
 
     [Fact]
-    public void TorznabErrorAndUrls()
+    public void TorznabSourcesAreSkippedWithAHint()
     {
-        var ex = Assert.Throws<SourceException>(() => TorznabSource.ParseFeed("j", """<error code="100" description="Invalid API Key" />""", out _));
-        Assert.Contains("Invalid API Key", ex.Message);
-        Assert.Equal("http://h:9117/api/v2.0/indexers/all/results/torznab/api", TorznabSource.ApiUrl("http://h:9117/api/v2.0/indexers/all/results/torznab/"));
-        Assert.Equal("http://h:9696/1/api", TorznabSource.ApiUrl("http://h:9696/1/api"));
-        Assert.Equal("http://h/api?t=search&q=%E7%89%87&limit=100&offset=0&extended=1&apikey=k", TorznabSource.SearchUrl("http://h", "k", "片", 100, 0));
+        var rule = new SourceRule { Name = "Jackett", Kind = "torznab", Endpoints = new List<string> { "http://127.0.0.1:9117" } };
+        Assert.False(SourceFactory.TryCreate(rule, new HttpClient(), out _, out var problem));
+        Assert.Contains("不再支持", problem);
     }
 
     [Fact]

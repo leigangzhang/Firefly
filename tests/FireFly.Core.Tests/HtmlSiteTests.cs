@@ -259,6 +259,61 @@ public class HtmlSiteTests
     }
 
     [Fact]
+    public void FindsSearchFormOnHomePage()
+    {
+        var home = new Uri("https://x.test/");
+        var doc = MiniHtml.Parse("""
+            <form action="/login" method="post"><input name="user"><input type="password" name="pw"></form>
+            <form action="/topics/list" method="get"><input type="text" name="keyword"><input type="hidden" name="sort" value="new"><button>搜索</button></form>
+            """);
+        Assert.Equal("https://x.test/topics/list?keyword=%E6%B5%81%E6%B5%AA%E5%9C%B0%E7%90%83&sort=new", SourceDetector.SearchFormUrl(doc, home, "流浪地球")!.AbsoluteUri);
+        Assert.Null(SourceDetector.SearchFormUrl(MiniHtml.Parse("""<form action="https://other.test/s"><input name="q"></form>"""), home, "a"));
+    }
+
+    [Fact]
+    public void ReadsOpenSearchTemplate()
+    {
+        const string xml = """
+            <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+              <Url type="application/x-suggestions+json" template="https://m.diao.im/suggest?q={searchTerms}"/>
+              <Url type="text/html" template="https://m.diao.im/search?keyword={searchTerms}&amp;p={startPage?}"/>
+            </OpenSearchDescription>
+            """;
+        Assert.Equal("https://m.diao.im/search?keyword=%E6%B5%81%E6%B5%AA%E5%9C%B0%E7%90%83&p=", SourceDetector.OpenSearchTemplate(xml, new Uri("https://m.diao.im/"), "流浪地球")!.AbsoluteUri);
+        Assert.Null(SourceDetector.OpenSearchTemplate("not xml", new Uri("https://m.diao.im/"), "a"));
+        const string plain = """<OpenSearchDescription><Url type="text/html" template="http://share.x.test/topics/list?keyword={searchTerms}"/></OpenSearchDescription>""";
+        Assert.Equal("https://share.x.test/topics/list?keyword=a", SourceDetector.OpenSearchTemplate(plain, new Uri("https://share.x.test/"), "a")!.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task DetectsFromBareSiteAddress()
+    {
+        var pages = new Pages(u => u.AbsolutePath switch
+        {
+            "/" => (HttpStatusCode.OK, """<html><body><form action="/search"><input type="search" name="keyword"></form></body></html>"""),
+            "/search" when u.Query.Contains("keyword=", StringComparison.Ordinal) => (HttpStatusCode.OK, ListPage),
+            "/d/1" => (HttpStatusCode.OK, Detail(H1)),
+            "/d/2" => (HttpStatusCode.OK, Detail(H2)),
+            "/d/3" => (HttpStatusCode.OK, Detail(H3)),
+            _ => null,
+        });
+        var result = await new SourceDetector(new HttpClient(pages)).DetectAsync("https://x.test", null, new RulesDocument(), CancellationToken.None);
+        Assert.Contains(result.Steps, s => s.Label == "找搜索入口" && s.State == "ok");
+        Assert.Equal(SourceFactory.Html, result.Rule!.Kind);
+        Assert.Equal("https://x.test/search?keyword={keyword}", result.Rule.Endpoints[0]);
+        Assert.Equal(3, result.Preview.Count);
+    }
+
+    [Fact]
+    public async Task BareSiteWithoutSearchAsksForAResultPage()
+    {
+        var pages = new Pages(u => u.AbsolutePath == "/" ? (HttpStatusCode.OK, "<html><body>欢迎</body></html>") : null);
+        var result = await new SourceDetector(new HttpClient(pages)).DetectAsync("https://y.test/", null, new RulesDocument(), CancellationToken.None);
+        Assert.Null(result.Rule);
+        Assert.Contains(result.Steps, s => s.Label == "找搜索入口" && s.State == "fail" && s.Detail.Contains("粘贴进来", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task HtmlSourceReportsChallenge()
     {
         var http = new HttpClient(new CfHandler());

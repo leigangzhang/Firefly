@@ -28,7 +28,7 @@ public sealed record DetectResult(
     string? SampleJson);
 
 /// <summary>
-/// "粘贴一次搜索的地址"：用户在资源站搜一次，把浏览器地址栏的地址贴过来，插件从这个样例学会这个站怎么搜。
+/// "粘贴资源站的网址"：只给站点时先找到搜索入口；也可以直接给一次搜索的结果页地址，插件从这个样例学会这个站怎么搜。
 /// 网页地址和接口地址往往不同，按四步依次尝试，前一步成功就停：
 /// 1. 认识的站（规则里已有这个域名）直接用现成规则；
 /// 2. 地址本身就是 JSON 接口，或同域名下常见的接口路径；
@@ -72,6 +72,18 @@ public sealed partial class SourceDetector
 
         steps.Add(new DetectStep("1. 认识这个站吗", "skip", $"规则里没有 {page.Host}"));
 
+        // 只给了站点地址：先找到这个站怎么搜，再按搜索结果页往下识别
+        if (IsBareSite(page, sample))
+        {
+            sample = string.IsNullOrWhiteSpace(sample) ? DefaultSample : sample.Trim();
+            if (await FindSearchUrlAsync(page, sample, steps, ct).ConfigureAwait(false) is not { } searchUrl)
+            {
+                return Fail(steps);
+            }
+
+            page = searchUrl;
+        }
+
         var query = ParseQuery(page.Query);
         var keywordParam = FindKeywordParam(query, sample);
         if (keywordParam is null)
@@ -87,7 +99,7 @@ public sealed partial class SourceDetector
             if (pathAttempt.Blocked)
             {
                 steps.Add(new DetectStep("2. 打开搜索页", "fail", $"{page.Host} 开启了 Cloudflare 人机验证，插件在服务器上打不开它的搜索页（浏览器里能打开是因为你过了验证）"));
-                steps.Add(new DetectStep("怎么办", "info", "可以" + ViaJackett));
+                steps.Add(new DetectStep("怎么办", "info", NotSupported));
                 return Fail(steps);
             }
 
@@ -110,7 +122,7 @@ public sealed partial class SourceDetector
         if (first.Blocked)
         {
             steps.Add(new DetectStep("2. 打开搜索页", "fail", $"{page.Host} 开启了 Cloudflare 人机验证，插件在服务器上打不开它的搜索页（浏览器里能打开是因为你过了验证）"));
-            steps.Add(new DetectStep("怎么办", "info", "可以" + ViaJackett));
+            steps.Add(new DetectStep("怎么办", "info", NotSupported));
             return Fail(steps);
         }
 
@@ -215,21 +227,21 @@ public sealed partial class SourceDetector
 
         if (html is not null && LooksLikeResultPage(html))
         {
-            steps.Add(new DetectStep("怎么办", "info", "网页里有磁力，但没认出结果列表的结构；可以在下面手动填选择器，或者" + ViaJackett));
+            steps.Add(new DetectStep("怎么办", "info", "网页里有磁力，但没认出结果列表的结构；可以在下面手动填选择器"));
             return Fail(steps);
         }
 
         if (_signedApi is not null)
         {
-            steps.Add(new DetectStep("怎么办", "info", $"这个站的搜索接口（{_signedApi}）要求每次请求带上网页脚本算出的签名，这是站点用来挡第三方程序的，插件不模仿。可以" + ViaJackett));
+            steps.Add(new DetectStep("怎么办", "info", $"这个站的搜索接口（{_signedApi}）要求每次请求带上网页脚本算出的签名，这是站点用来挡第三方程序的。" + NotSupported));
             return Fail(steps);
         }
 
-        steps.Add(new DetectStep("请你帮忙", "info", "按 F12 打开开发者工具 → 网络（Network）→ 再搜一次 → 复制名字里带 search 的那条请求地址，粘贴到这里。如果那条地址就是你粘贴的网页地址，说明这个站没有数据接口。也可以" + ViaJackett));
+        steps.Add(new DetectStep("请你帮忙", "info", "按 F12 打开开发者工具 → 网络（Network）→ 再搜一次 → 复制名字里带 search 的那条请求地址，粘贴到这里。如果那条地址就是你粘贴的网页地址，说明这个站没有数据接口。"));
         return Fail(steps);
     }
 
-    private const string ViaJackett = "在 Jackett / Prowlarr 里添加这个站（开了人机验证的站需要再配一个 FlareSolverr），然后用\"Torznab\"方式接入。";
+    private const string NotSupported = "插件不绕过人机验证和接口签名，这个站暂时用不了，可以换一个在浏览器里打开就能直接搜的站。";
 
     /// <summary>网页里直接有磁力链接或一串 info-hash：结果是服务端渲染的。</summary>
     internal static bool LooksLikeResultPage(string html) =>
@@ -597,12 +609,12 @@ public sealed partial class SourceDetector
                 continue;
             }
 
-            if (values.Count(v => TorznabSource.Normalize(v) is not null) * 2 >= items.Count)
+            if (values.Count(v => InfoHash.Normalize(v) is not null) * 2 >= items.Count)
             {
                 return g.Key;
             }
 
-            if (magnet is null && values.Count(v => TorznabSource.Normalize(TorznabSource.HashFromMagnet(v)) is not null) * 2 >= items.Count)
+            if (magnet is null && values.Count(v => InfoHash.Normalize(InfoHash.FromMagnet(v)) is not null) * 2 >= items.Count)
             {
                 magnet = g.Key;
             }

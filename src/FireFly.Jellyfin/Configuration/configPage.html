@@ -7,12 +7,11 @@
     #FireFlyConfigPage .ffc-nav { display: flex; flex-wrap: wrap; gap: .5em; margin: 0 0 1.2em; }
     #FireFlyConfigPage .ffc-nav a { padding: .3em 1em; border-radius: 999px; border: 1px solid rgba(128,128,128,.35); text-decoration: none; color: inherit; font-size: .92em; }
     #FireFlyConfigPage .ffc-nav a:hover { border-color: #00a4dc; }
-    #FireFlyConfigPage details.ffc-group, #FireFlyConfigPage section.ffc-group { border: 1px solid rgba(128,128,128,.25); border-radius: 10px; padding: .9em 1.2em; margin: 0 0 1.2em; background: rgba(128,128,128,.06); }
+    #FireFlyConfigPage details.ffc-group { border: 1px solid rgba(128,128,128,.25); border-radius: 10px; padding: .9em 1.2em; margin: 0 0 1.2em; background: rgba(128,128,128,.06); }
     #FireFlyConfigPage details.ffc-group > summary { cursor: pointer; font-size: 1.1em; font-weight: 500; padding: .2em 0; }
     #FireFlyConfigPage details.ffc-group > summary .ffc-sum { font-size: .8em; font-weight: 400; opacity: .7; margin-left: .8em; }
     #FireFlyConfigPage details.ffc-group[open] > summary { margin-bottom: 1em; }
     #FireFlyConfigPage .ffc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1em; flex-wrap: wrap; margin-bottom: .8em; }
-    #FireFlyConfigPage .ffc-head h3 { margin: 0 0 .2em; font-size: 1.25em; }
     #FireFlyConfigPage .ffc-desc { font-size: .85em; opacity: .75; }
     #FireFlyConfigPage .ffc-btn { display: inline-flex; align-items: center; gap: .35em; border: 1px solid rgba(128,128,128,.45); background: rgba(128,128,128,.12); color: inherit; border-radius: 6px; padding: .4em .9em; cursor: pointer; font: inherit; font-size: .92em; min-height: 2.2em; }
     #FireFlyConfigPage .ffc-btn:hover { border-color: #00a4dc; }
@@ -84,10 +83,6 @@
     #FireFlyConfigPage .ffc-dialog > header { display: flex; justify-content: space-between; align-items: center; padding: .9em 1.2em; border-bottom: 1px solid rgba(128,128,128,.25); }
     #FireFlyConfigPage .ffc-dialog > header h3 { margin: 0; font-size: 1.15em; }
     #FireFlyConfigPage .ffc-dialog > .ffc-body { padding: 1em 1.2em 1.2em; display: flex; flex-direction: column; gap: .9em; }
-    #FireFlyConfigPage .ffc-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(14em, 1fr)); gap: .6em; }
-    #FireFlyConfigPage .ffc-methods button { text-align: left; border: 1px solid rgba(128,128,128,.4); background: none; color: inherit; border-radius: 8px; padding: .6em .8em; cursor: pointer; font: inherit; display: flex; flex-direction: column; }
-    #FireFlyConfigPage .ffc-methods button.on { border-color: #00a4dc; background: rgba(0,164,220,.12); }
-    #FireFlyConfigPage .ffc-methods small { opacity: .7; }
     #FireFlyConfigPage .ffc-field { display: flex; flex-direction: column; gap: .3em; }
     #FireFlyConfigPage .ffc-field > label { font-size: .9em; }
     #FireFlyConfigPage .ffc-actions { display: flex; gap: .6em; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
@@ -108,7 +103,6 @@
         <a href="#" data-goto="ffcTmdb">元数据（TMDb）</a>
         <a href="#" data-goto="ffcSites">资源站点</a>
         <a href="#" data-goto="ffcKeywords">优选关键词</a>
-        <a href="#" data-goto="ffcAdvanced">高级</a>
       </nav>
       <form id="FireFlyConfigForm">
         <details class="ffc-group" id="ffcDownload">
@@ -168,24 +162,19 @@
           </div>
         </details>
 
-        <section class="ffc-group" id="ffcSites">
+        <details class="ffc-group" id="ffcSites">
+          <summary>资源站点<span class="ffc-sum" id="ffcSitesSum"></span></summary>
           <div class="ffc-head">
-            <div>
-              <h3>资源站点</h3>
-              <div class="ffc-desc">搜索资源时请求下面开启的站点。右边的类型标签表示站点负责哪些资源，搜这类影片时才请求它。拖动 ⠿ 调整顺序：越靠前优先级越高。</div>
-            </div>
+            <div class="ffc-desc">越靠前越优先，拖动 ⠿ 调整顺序。</div>
             <button type="button" class="ffc-btn ffc-btn-primary" id="ffcAddSite">＋ 添加站点</button>
           </div>
           <div class="ffc-sites" id="ffcSiteList"></div>
-          <div class="ffc-desc" style="margin-top:.6em">内置站点随插件更新；你改过的地方单独保存，没改过的部分会自动跟随新版本。</div>
-        </section>
+        </details>
 
-        <section class="ffc-group" id="ffcKeywords">
+        <details class="ffc-group" id="ffcKeywords">
+          <summary>优选关键词<span class="ffc-sum" id="ffcKwSum"></span></summary>
           <div class="ffc-head">
-            <div>
-              <h3>优选关键词</h3>
-              <div class="ffc-desc">先用"片名 + 关键词"搜索，标题里带这些词的资源标为"优选"排在最前。越靠前的词优先级越高，拖动可调整。点一个词可以限定它只用于某些站点或类型。</div>
-            </div>
+            <div class="ffc-desc">标题带这些词的资源排在最前。越靠前越优先，拖动调整；点一个词可限定站点或类型。</div>
             <button type="button" class="ffc-btn ffc-btn-link" id="ffcResetKw">恢复默认</button>
           </div>
           <div class="ffc-kws" id="ffcKwList"></div>
@@ -195,7 +184,7 @@
             <div class="ffc-head">
               <div>
                 <div style="font-weight:500">搜索计划</div>
-                <div class="ffc-desc">按当前设置（含还没保存的改动），搜不同类型的影片时会这样请求。</div>
+                <div class="ffc-desc">按当前设置，搜不同类型的影片时会这样请求。</div>
               </div>
               <div class="ffc-tabs" role="tablist" id="ffcPlanTabs"></div>
             </div>
@@ -209,19 +198,6 @@
               <span class="ffc-desc" id="ffcTryResult"></span>
             </div>
           </div>
-        </section>
-
-        <details class="ffc-group" id="ffcAdvanced">
-          <summary>高级<span class="ffc-sum" id="ffcAdvSum"></span></summary>
-          <div id="ffcWarnings"></div>
-          <div class="ffc-desc" style="margin:.6em 0">手写规则文件（可选，改完自动重新加载）：<code id="ffcRulesFile"></code></div>
-          <div style="display:flex; gap:.6em; flex-wrap:wrap; margin-bottom:.8em">
-            <button type="button" class="ffc-btn" id="ffcExport">导出我的改动</button>
-            <button type="button" class="ffc-btn" id="ffcImportAll">导入改动</button>
-            <button type="button" class="ffc-btn ffc-btn-danger" id="ffcResetAll">恢复全部默认（清除本页站点和关键词改动）</button>
-          </div>
-          <div class="ffc-desc" style="margin-bottom:.4em">最终生效的规则（内置 → rules.json → 本页改动 叠加后，只读）</div>
-          <pre class="ffc-code" id="ffcEffective"></pre>
         </details>
 
         <div class="ffc-savebar">
@@ -390,10 +366,9 @@
         if (!list.length) {
           box.appendChild(el('div', { class: 'ffc-empty' }, [
             el('strong', { text: '还没有资源站点' }),
-            el('div', { class: 'ffc-desc', text: '萤火虫不内置任何资源站，添加至少一个站点后才能在详情页获取资源。有两种方式：粘贴一次在站点上搜索的网页地址让插件自动识别；或者接入 Jackett / Prowlarr，开了人机验证的站也能用。' }),
+            el('div', { class: 'ffc-desc', text: '萤火虫不内置任何资源站，添加至少一个站点后才能在详情页获取资源。把资源站的网址粘贴进来，插件会自动识别怎么搜。开了人机验证的站暂时不支持。' }),
             el('div', { class: 'ffc-actions', style: 'justify-content:center' }, [
-              el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '粘贴搜索地址', onclick: function () { addSiteDialog('A'); } }),
-              el('button', { type: 'button', class: 'ffc-btn', text: '连接 Jackett / Prowlarr', onclick: function () { addSiteDialog('B'); } }),
+              el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '添加第一个站点', onclick: function () { addSiteDialog(); } }),
             ]),
           ]));
         }
@@ -421,7 +396,7 @@
             grip,
             el('span', { class: 'ffc-dot ' + health.cls, 'aria-hidden': 'true' }),
             el('button', { type: 'button', class: 'ffc-name', 'aria-expanded': open ? 'true' : 'false', text: (open ? '▾ ' : '▸ ') + s.name, onclick: function () { ui.open = open ? null : s.name; renderSites(); } }),
-            el('span', { class: 'ffc-badge', text: s.kind === 'torznab' ? 'Torznab' : s.kind === 'html' ? '网页' + (s.builtin ? '' : ' · 自定义') : s.builtin ? (s.modified ? '内置 · 已改' : '内置') : '自定义' }),
+            el('span', { class: 'ffc-badge', text: s.kind === 'torznab' ? 'Torznab · 已不支持' : s.kind === 'html' ? '网页' + (s.builtin ? '' : ' · 自定义') : s.builtin ? (s.modified ? '内置 · 已改' : '内置') : '自定义' }),
             el('span', { class: 'ffc-status ' + (health.cls === 'bad' ? 'bad' : ''), text: health.text }),
             chips,
             el('button', { type: 'button', class: 'ffc-btn', text: '测试', onclick: function () { testSite(s); } }),
@@ -447,7 +422,7 @@
 
       function siteDetail(s) {
         var box = el('div', { class: 'ffc-detail' });
-        box.appendChild(el('div', { class: 'ffc-desc', text: s.kind === 'torznab' ? 'Torznab 地址（依次尝试）' : s.kind === 'html' ? '搜索地址（{keyword} 是搜索词，{page} 是页码；依次尝试）' : '地址（依次尝试，上次成功的自动排到最前）' }));
+        box.appendChild(el('div', { class: 'ffc-desc', text: s.kind === 'html' ? '搜索地址（{keyword} 是搜索词，{page} 是页码；依次尝试）' : '地址（依次尝试，上次成功的自动排到最前）' }));
         var endpoints = s.endpoints.length ? s.endpoints.slice() : [''];
         function save() {
           var values = Array.prototype.map.call(box.querySelectorAll('.ffc-endpoint input'), function (i) { return i.value.trim(); }).filter(Boolean);
@@ -514,7 +489,7 @@
           box.appendChild(rows(r.rows));
         } else {
           box.appendChild(el('div', { class: 'ffc-note bad', text: '✕ ' + (r.error || '搜索失败') }));
-          box.appendChild(el('div', { class: 'ffc-desc', html: '可能的原因：<br>· 站点换了域名：到站点的发布页找新地址，填到"地址"里<br>· 站点需要先在浏览器里验证（人机验证、登录），插件无法通过<br>· 站点改了返回格式：用"添加站点 → 粘贴一次搜索的地址"重新识别' }));
+          box.appendChild(el('div', { class: 'ffc-desc', html: '可能的原因：<br>· 站点换了域名：到站点的发布页找新地址，填到"地址"里<br>· 站点需要先在浏览器里验证（人机验证、登录），插件无法通过<br>· 站点改了返回格式：用"添加站点"重新粘贴网址识别' }));
         }
         return box;
       }
@@ -663,22 +638,14 @@
         $('#ffcTry').textContent = '按"' + catLabel(ui.planTab) + '"搜索';
       }
 
-      // ---------- 高级 ----------
-      function renderAdvanced(effective, warnings) {
-        if (effective != null) $('#ffcEffective').textContent = effective;
-        var box = $('#ffcWarnings');
-        if (warnings) {
-          box.innerHTML = '';
-          if (warnings.length) warnings.forEach(function (w) { box.appendChild(el('div', { class: 'ffc-note warn', style: 'margin-bottom:.4em', text: w })); });
-          else box.appendChild(el('div', { class: 'ffc-note', text: '规则正常' }));
-          $('#ffcAdvSum').textContent = warnings.length ? warnings.length + ' 条提示' : '规则正常';
-        }
-      }
-
       function renderAll() {
         renderSites();
         renderKeywords();
         renderPlan();
+        var on = sites().filter(function (s) { return s.enabled; }).length;
+        $('#ffcSitesSum').textContent = sites().length ? sites().length + ' 个站点，' + on + ' 个开启' : '还没有站点';
+        var kws = keywords().filter(function (k) { return !k.off; }).length;
+        $('#ffcKwSum').textContent = kws ? kws + ' 个关键词' : '未设置';
       }
 
       // ---------- 弹窗 ----------
@@ -709,6 +676,7 @@
         ovSources().push(rule);
         ui.open = rule.name;
         markDirty(); closeModal(); renderAll();
+        $('#ffcSites').open = true;
         $('#ffcSites').scrollIntoView({ behavior: 'smooth' });
       }
 
@@ -732,47 +700,30 @@
         return box;
       }
 
-      function addSiteDialog(method) {
+      function addSiteDialog() {
         var body = el('div', { class: 'ffc-body' });
-        var methods = [
-          { id: 'A', title: '粘贴一次搜索的地址', sub: '推荐 · 自动识别，大多数人用这个' },
-          { id: 'B', title: '连接 Jackett / Prowlarr', sub: '一次接入几百个站点（Torznab）' },
-          { id: 'C', title: '粘贴规则片段', sub: '导入别人分享的站点' },
-        ];
-        var current = method || 'A';
-        var pane = el('div');
-        var tabs = el('div', { class: 'ffc-methods', role: 'tablist' });
-        function draw() {
-          tabs.innerHTML = '';
-          methods.forEach(function (m) {
-            tabs.appendChild(el('button', { type: 'button', role: 'tab', class: current === m.id ? 'on' : '', 'aria-selected': current === m.id ? 'true' : 'false', onclick: function () { current = m.id; draw(); } }, [el('span', { text: m.title }), el('small', { text: m.sub })]));
-          });
-          pane.innerHTML = '';
-          pane.appendChild(current === 'A' ? paneDetect() : current === 'B' ? paneTorznab() : paneSnippet());
-        }
-        ui.switchMethod = function (id) { current = id; draw(); };
-        body.appendChild(tabs);
-        body.appendChild(pane);
+        body.appendChild(paneDetect());
         openModal('添加站点', body);
-        draw();
+        var input = $('#ffcDetectUrl');
+        if (input) input.focus();
       }
 
-      // A：粘贴搜索地址，插件自动识别
+      // 粘贴站点地址（或一次搜索的结果页地址），插件自动识别
       function paneDetect() {
         var box = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
-        var input = el('input', { class: 'ffc-input', id: 'ffcDetectUrl', placeholder: 'https://资源站/search?keyword=' + ed.sample, style: 'flex:1' });
+        var input = el('input', { class: 'ffc-input', id: 'ffcDetectUrl', placeholder: 'https://m.diao.im', style: 'flex:1' });
         var out = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
         function run() {
           if (!input.value.trim()) return;
-          out.innerHTML = '<div class="ffc-desc">正在识别：认识这个站吗… 正在找接口… 正在读网页结果… 正在找磁力…（最多约一分钟）</div>';
+          out.innerHTML = '<div class="ffc-desc">正在识别：找搜索入口… 正在找接口… 正在读网页结果… 正在找磁力…（最多约一分钟）</div>';
           var pasted = input.value.trim();
           api('POST', 'FireFly/sources/detect', { url: pasted, sample: ed.sample }).then(function (r) { out.innerHTML = ''; out.appendChild(detectResult(r, pasted)); }, function () { out.innerHTML = '<div class="ffc-note bad">识别请求失败</div>'; });
         }
         input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); run(); } });
         box.appendChild(el('div', { class: 'ffc-field' }, [
-          el('label', { for: 'ffcDetectUrl', html: '告诉我们这个站怎么搜：在站内搜一次<b>"' + esc(ed.sample) + '"</b>，把浏览器地址栏的地址粘贴到这里' }),
+          el('label', { for: 'ffcDetectUrl', text: '粘贴资源站的网址' }),
           el('div', { style: 'display:flex; gap:.5em' }, [input, el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '识别', onclick: run })]),
-          el('div', { class: 'ffc-desc', text: '这只是一个样例：插件从中学会这个站怎么搜，之后所有影片都会通过它找资源。' }),
+          el('div', { class: 'ffc-desc', html: '插件会自己找到这个站的搜索框，用<b>"' + esc(ed.sample) + '"</b>试搜一次，学会怎么读结果。认不出来时，可以在站内搜一次，把搜索结果页的地址粘贴进来。开了人机验证的站暂不支持。' }),
         ]));
         box.appendChild(out);
         return box;
@@ -802,13 +753,9 @@
           box.appendChild(siteForm(hr, function () { htmlDialog(hr); }));
           return box;
         }
-        var blocked = (r.steps || []).some(function (s) { return /人机验证|Jackett/.test(s.detail || ''); });
         var htmlFail = (r.steps || []).some(function (s) { return /手动填选择器|网页里直接有结果|磁力在哪/.test((s.label || '') + (s.detail || '')); });
-        if (!r.rule && (blocked || htmlFail)) {
-          var acts = el('div', { class: 'ffc-actions' });
-          if (htmlFail) acts.appendChild(el('button', { type: 'button', class: 'ffc-btn', text: '手动填选择器', onclick: function () { htmlDialog(blankHtmlRule(pasted)); } }));
-          if (blocked) acts.appendChild(el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '用 Jackett 接入这个站', onclick: function () { if (ui.switchMethod) ui.switchMethod('B'); } }));
-          box.appendChild(acts);
+        if (!r.rule && htmlFail) {
+          box.appendChild(el('div', { class: 'ffc-actions' }, [el('button', { type: 'button', class: 'ffc-btn', text: '手动填选择器', onclick: function () { htmlDialog(blankHtmlRule(pasted)); } })]));
         }
         if (r.rule) {
           var rule = r.rule;
@@ -853,109 +800,6 @@
         return box;
       }
 
-      // B：Jackett / Prowlarr
-      function paneTorznab() {
-        var url = el('input', { class: 'ffc-input', id: 'ffcTzUrl', placeholder: 'http://127.0.0.1:9117/api/v2.0/indexers/all/results/torznab' });
-        var key = el('input', { class: 'ffc-input', id: 'ffcTzKey', placeholder: 'Jackett 首页右上角的 API Key' });
-        var name = el('input', { class: 'ffc-input', id: 'ffcTzName', value: 'Jackett' });
-        var types = [];
-        var out = el('div');
-        function rule() { return { name: name.value.trim() || 'Jackett', kind: 'torznab', endpoints: [url.value.trim()], apiKey: key.value.trim(), types: types, enabled: true }; }
-        var probe = el('div', {}, [el('div', { class: 'ffc-desc', text: '正在找本机的 Jackett / Prowlarr…' })]);
-        api('GET', 'FireFly/sources/indexers').then(function (r) {
-          probe.innerHTML = '';
-          var found = (r && r.found) || [];
-          if (!found.length) {
-            probe.appendChild(el('div', { class: 'ffc-note warn', text: '没在本机（9117 / 9696 端口）找到 Jackett 或 Prowlarr。装在别的机器上的话，直接把地址填到下面。' }));
-            return;
-          }
-          found.forEach(function (f) {
-            probe.appendChild(el('div', { class: 'ffc-note' }, [
-              el('span', { style: 'flex:1', text: '找到本机的 ' + f.name + '（' + f.url + '）' + (f.name === 'Prowlarr' ? '：Prowlarr 每个站点有自己的地址，把 {indexerId} 换成站点编号。' : '') }),
-              el('button', { type: 'button', class: 'ffc-btn', text: '填入地址', onclick: function () { url.value = f.torznab; name.value = f.name; key.focus(); } }),
-            ]));
-          });
-        }, function () { probe.innerHTML = ''; });
-        return el('div', { style: 'display:flex; flex-direction:column; gap:.9em' }, [
-          el('div', { class: 'ffc-desc', text: 'Jackett 和 Prowlarr 已经适配了几百个资源站点。接上一个，就能用它里面配置好的所有站点，站点改版也由它们跟进；开了人机验证的站，也可以由它们配合 FlareSolverr 打开。' }),
-          el('ol', { class: 'ffc-steps', 'aria-label': '接入步骤' }, [
-            el('li', {}, [el('span', { class: 'info', text: '1' }), el('span', { html: '安装 Jackett（推荐 Docker：<code>linuxserver/jackett</code>）。要接开了人机验证的站，再装一个 FlareSolverr，并在 Jackett 设置里填它的地址。' })]),
-            el('li', {}, [el('span', { class: 'info', text: '2' }), el('span', { text: '打开 Jackett 网页（默认 http://本机:9117），点"Add indexer"添加你常用的站点。' })]),
-            el('li', {}, [el('span', { class: 'info', text: '3' }), el('span', { text: '复制 Jackett 首页右上角的 API Key，和 Torznab 地址一起填到下面，点"测试连接"。' })]),
-          ]),
-          probe,
-          el('div', { class: 'ffc-field' }, [el('label', { for: 'ffcTzUrl', text: 'Torznab 地址' }), url, el('div', { class: 'ffc-desc', text: 'Jackett：首页站点旁的"Copy Torznab Feed"，把站点 ID 换成 all 可一次搜索全部站点。Prowlarr：站点的 Torznab 地址（以 /api 结尾）。' })]),
-          el('div', { class: 'ffc-field' }, [el('label', { for: 'ffcTzKey', text: 'API Key' }), key]),
-          el('div', { style: 'display:flex; gap:.8em; align-items:center; flex-wrap:wrap' }, [el('label', { for: 'ffcTzName', text: '站点名' }), name, el('span', { class: 'ffc-desc', text: '负责的类型' }), typeChips(types)]),
-          out,
-          el('div', { class: 'ffc-actions' }, [
-            el('button', { type: 'button', class: 'ffc-btn', text: '测试连接', onclick: function () {
-              if (!url.value.trim()) return;
-              out.innerHTML = '<div class="ffc-desc">正在搜索"' + esc(ed.sample) + '"…</div>';
-              api('POST', 'FireFly/sources/test', { rule: rule(), keyword: ed.sample }).then(function (r) { out.innerHTML = ''; out.appendChild(testResult(r)); }, function () { out.innerHTML = '<div class="ffc-note bad">请求失败</div>'; });
-            } }),
-            el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '添加', onclick: function () { if (url.value.trim()) addSite(rule(), false); } }),
-          ]),
-        ]);
-      }
-
-      // C：粘贴规则片段或订阅地址
-      function paneSnippet() {
-        var text = el('textarea', { class: 'ffc-input', id: 'ffcSnippet', rows: '10', style: 'font-family:ui-monospace,Menlo,monospace; font-size:.85em', placeholder: '{\n  "name": "站点名",\n  "kind": "jsonApi",\n  "endpoints": ["https://…/api/search"],\n  "response": { "itemsPath": "data.list", "fields": { "infoHash": "hash", "name": "title" } }\n}\n\n也可以粘贴规则订阅地址（https://…）' });
-        var out = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
-        function run() {
-          var value = text.value.trim();
-          if (!value) return;
-          out.innerHTML = '<div class="ffc-desc">正在读取…</div>';
-          var ready = /^https?:\/\//i.test(value)
-            ? api('POST', 'FireFly/sources/import', { url: value }).then(function (r) { return r.text; })
-            : Promise.resolve(value);
-          ready.then(function (json) { out.innerHTML = ''; out.appendChild(snippetPreview(json)); }, function (e) {
-            out.innerHTML = '';
-            out.appendChild(el('div', { class: 'ffc-note bad', text: '取不到这个地址' + (e && e.responseJSON && e.responseJSON.error ? '：' + e.responseJSON.error : '') }));
-          });
-        }
-        return el('div', { style: 'display:flex; flex-direction:column; gap:.9em' }, [
-          el('div', { class: 'ffc-field' }, [el('label', { for: 'ffcSnippet', text: '粘贴别人分享的站点规则（一个站点、多个站点或整份覆盖文件都可以），或规则订阅地址' }), text]),
-          el('div', { class: 'ffc-note warn', text: '规则只决定插件去哪个地址搜索、怎么读结果，不会执行任何代码。添加前会先试搜一次让你确认。' }),
-          el('div', { class: 'ffc-actions' }, [el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '检查并试搜', onclick: run })]),
-          out,
-        ]);
-      }
-
-      function snippetPreview(json) {
-        var box = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
-        var data;
-        try { data = JSON.parse(json); } catch (e) {
-          box.appendChild(el('div', { class: 'ffc-note bad', text: '不是合法的 JSON：' + e.message }));
-          return box;
-        }
-        var list = Array.isArray(data) ? data : data && Array.isArray(data.sources) ? data.sources : data && data.name ? [data] : [];
-        if (data && data.format > 1) { box.appendChild(el('div', { class: 'ffc-note bad', text: '这份规则的格式版本 ' + data.format + ' 高于插件支持的版本，请先升级插件。' })); return box; }
-        if (!list.length) { box.appendChild(el('div', { class: 'ffc-note bad', text: '里面没有找到站点（需要 name、kind、endpoints）。' })); return box; }
-        list.forEach(function (rule) {
-          var problems = [];
-          if (!rule.name) problems.push('缺少 name');
-          if (rule.kind !== 'jsonApi' && rule.kind !== 'torznab' && rule.kind !== 'html') problems.push('kind 必须是 jsonApi、torznab 或 html');
-          if (rule.kind === 'html' && !(rule.html && rule.html.item)) problems.push('缺少 html.item');
-          if (!rule.endpoints || !rule.endpoints.length) problems.push('缺少 endpoints');
-          if (rule.kind === 'jsonApi' && !(rule.response && rule.response.itemsPath)) problems.push('缺少 response.itemsPath');
-          var card = el('div', { class: 'ffc-panel' }, [el('strong', { text: rule.name || '（没有名字）' })]);
-          if (problems.length) {
-            card.appendChild(el('div', { class: 'ffc-note bad', text: problems.join('；') }));
-          } else {
-            rule.types = rule.types || [];
-            card.appendChild(el('div', { class: 'ffc-desc', text: '会访问：' + rule.endpoints.map(host).join('、') }));
-            var result = el('div', { class: 'ffc-desc', text: '正在试搜"' + ed.sample + '"…' });
-            card.appendChild(result);
-            card.appendChild(siteForm(rule, null));
-            api('POST', 'FireFly/sources/test', { rule: rule, keyword: ed.sample }).then(function (r) { result.innerHTML = ''; result.className = ''; result.appendChild(testResult(r)); }, function () { result.textContent = '试搜失败'; });
-          }
-          box.appendChild(card);
-        });
-        return box;
-      }
-
       // 手动调整字段映射：下拉框里是接口返回里实际出现的字段（带示例值）
       function mappingDialog(r, rule) {
         var api0 = new URL(r.apiUrl);
@@ -993,7 +837,6 @@
         body.appendChild(el('div', { class: 'ffc-desc', text: '在左边为每个字段选接口返回里对应的那一项（右边是返回的样例），然后点"预览"看读出来的结果。带 * 的必填。' }));
         body.appendChild(el('div', { class: 'ffc-map' }, [left, el('pre', { class: 'ffc-code', text: r.sampleJson || '' })]));
         body.appendChild(el('div', { class: 'ffc-actions' }, [
-          el('button', { type: 'button', class: 'ffc-btn', text: '复制为规则片段', onclick: function () { copy(JSON.stringify(rule, null, 2)); } }),
           el('button', { type: 'button', class: 'ffc-btn', text: '预览', onclick: function () {
             preview.innerHTML = '<div class="ffc-desc">正在搜索…</div>';
             api('POST', 'FireFly/sources/test', { rule: rule, keyword: ed.sample }).then(function (x) { preview.innerHTML = ''; preview.appendChild(testResult(x)); }, function () { preview.innerHTML = '<div class="ffc-note bad">请求失败</div>'; });
@@ -1037,7 +880,6 @@
           el('div', { class: 'ffc-maprow' }, [el('span', { text: '磁力在详情页' }), el('label', { for: 'ffcHtmlDetail', style: 'display:flex; gap:.5em; align-items:center' }, [detail, el('span', { class: 'ffc-desc', text: '列表里没有磁力时，打开每条结果的详情页去找（每次最多 ' + (h.detailLimit || 20) + ' 个）' })])]),
         ]));
         body.appendChild(el('div', { class: 'ffc-actions' }, [
-          el('button', { type: 'button', class: 'ffc-btn', text: '复制为规则片段', onclick: function () { copy(JSON.stringify(rule, null, 2)); } }),
           el('button', { type: 'button', class: 'ffc-btn', text: '预览', onclick: function () {
             if (!rule.endpoints[0] || !h.item) { preview.innerHTML = '<div class="ffc-note bad">请先填搜索地址和结果条目</div>'; return; }
             preview.innerHTML = '<div class="ffc-desc">正在搜索…</div>';
@@ -1047,11 +889,6 @@
         body.appendChild(preview);
         body.appendChild(siteForm(rule, null));
         openModal('调整 ' + rule.name + ' 的读取方式', body);
-      }
-
-      function copy(text) {
-        if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { Dashboard.alert('已复制'); }, function () { prompt('复制下面的内容', text); });
-        else prompt('复制下面的内容', text);
       }
 
       // ---------- 读取 / 保存 ----------
@@ -1111,11 +948,10 @@
           ed.categories = r.categories || [];
           ed.health = r.health || {};
           ed.sample = r.sample || ed.sample;
-          $('#ffcRulesFile').textContent = r.rulesFile + (r.rulesFileExists ? '' : '（不存在）');
-          renderAdvanced(r.effective, r.warnings);
           ui.dirty = false;
           $('#ffcDirty').textContent = '保存后立即生效，不需要重启 Jellyfin';
           renderAll();
+          if (!sites().length) $('#ffcSites').open = true;
         });
       }
 
@@ -1127,18 +963,8 @@
           target.scrollIntoView({ behavior: 'smooth' });
         });
       });
-      $('#ffcAddSite').addEventListener('click', function () { addSiteDialog('A'); });
+      $('#ffcAddSite').addEventListener('click', function () { addSiteDialog(); });
       $('#ffcResetKw').addEventListener('click', function () { delete ed.overlay.keywords; ui.editingKw = null; markDirty(); renderAll(); });
-      $('#ffcResetAll').addEventListener('click', function () {
-        if (!confirm('清除本页所有站点和关键词改动，恢复成内置规则（和 rules.json）？保存后生效。')) return;
-        ed.overlay = {}; ui.open = null; ui.editingKw = null; markDirty(); renderAll();
-      });
-      $('#ffcExport').addEventListener('click', function () { copy(cleanOverlay() ? JSON.stringify(JSON.parse(cleanOverlay()), null, 2) : '{}'); });
-      $('#ffcImportAll').addEventListener('click', function () {
-        var text = prompt('粘贴导出的改动（会替换本页现有的站点和关键词改动）');
-        if (!text) return;
-        try { ed.overlay = JSON.parse(text) || {}; markDirty(); renderAll(); } catch (e) { Dashboard.alert('不是合法的 JSON：' + e.message); }
-      });
       $('#ffcTry').addEventListener('click', function () {
         var title = $('#ffcTryTitle').value.trim();
         if (!title) return;
