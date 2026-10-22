@@ -1,4 +1,7 @@
 <!DOCTYPE html>
+
+
+
 <html>
 <head><title>FireFly</title></head>
 <body>
@@ -8,11 +11,43 @@
     #FireFlyConfigPage .ffc-nav a { padding: .3em 1em; border-radius: 999px; border: 1px solid rgba(128,128,128,.35); text-decoration: none; color: inherit; font-size: .92em; }
     #FireFlyConfigPage .ffc-nav a:hover { border-color: #00a4dc; }
     #FireFlyConfigPage details.ffc-group { border: 1px solid rgba(128,128,128,.25); border-radius: 10px; padding: .9em 1.2em; margin: 0 0 1.2em; background: rgba(128,128,128,.06); }
-    #FireFlyConfigPage details.ffc-group > summary { cursor: pointer; font-size: 1.1em; font-weight: 500; padding: .2em 0; }
+    #FireFlyConfigPage details.ffc-group > summary { cursor: pointer; padding: .2em 0; }
+    #FireFlyConfigPage details.ffc-group > summary.ffc-group-title {
+      font-family: inherit;
+      font-size: 1.1em;
+      font-weight: 500;
+      line-height: 1.4;
+      color: inherit;
+    }
     #FireFlyConfigPage details.ffc-group > summary .ffc-sum { font-size: .8em; font-weight: 400; opacity: .7; margin-left: .8em; }
     #FireFlyConfigPage details.ffc-group[open] > summary { margin-bottom: 1em; }
     #FireFlyConfigPage .ffc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1em; flex-wrap: wrap; margin-bottom: .8em; }
     #FireFlyConfigPage .ffc-desc { font-size: .85em; opacity: .75; }
+    #FireFlyConfigPage #ffcDownload .inputContainer,
+    #FireFlyConfigPage #ffcTmdb .inputContainer,
+    #FireFlyConfigPage #ffcTmdb .selectContainer,
+    #FireFlyConfigPage #ffcTmdb .checkboxContainer {
+      font-family: inherit;
+      font-size: .85em;
+    }
+    #FireFlyConfigPage #ffcDownload .inputContainer label,
+    #FireFlyConfigPage #ffcDownload .inputContainer input,
+    #FireFlyConfigPage #ffcTmdb .inputContainer label,
+    #FireFlyConfigPage #ffcTmdb .inputContainer input,
+    #FireFlyConfigPage #ffcTmdb .selectContainer label,
+    #FireFlyConfigPage #ffcTmdb .selectContainer select,
+    #FireFlyConfigPage #ffcTmdb .checkboxContainer label {
+      font-family: inherit;
+      font-size: 1em;
+    }
+    #FireFlyConfigPage #ffcDownload .fieldDescription,
+    #FireFlyConfigPage #ffcTmdb .fieldDescription {
+      font-size: 1em;
+      opacity: .75;
+    }
+    #FireFlyConfigPage .ffc-cache-row { display: flex; align-items: center; justify-content: space-between; gap: 1em; margin: 0 0 1.8em; padding-right: 2.5em; }
+    #FireFlyConfigPage .ffc-cache-toggle { display: inline-flex; align-items: center; gap: .6em; font-size: .85em; opacity: .75; }
+    #FireFlyConfigPage .ffc-cache-row #ffClearCache { flex: none; white-space: nowrap; }
     #FireFlyConfigPage .ffc-btn { display: inline-flex; align-items: center; gap: .35em; border: 1px solid rgba(128,128,128,.45); background: rgba(128,128,128,.12); color: inherit; border-radius: 6px; padding: .4em .9em; cursor: pointer; font: inherit; font-size: .92em; min-height: 2.2em; }
     #FireFlyConfigPage .ffc-btn:hover { border-color: #00a4dc; }
     #FireFlyConfigPage .ffc-btn:disabled { opacity: .5; cursor: default; }
@@ -24,16 +59,13 @@
     #FireFlyConfigPage .ffc-site { border-bottom: 1px solid rgba(128,128,128,.2); }
     #FireFlyConfigPage .ffc-site:last-child { border-bottom: none; }
     #FireFlyConfigPage .ffc-site.ffc-drop { box-shadow: inset 0 2px 0 #00a4dc; }
-    #FireFlyConfigPage .ffc-row { display: flex; align-items: center; gap: .7em; padding: .6em .8em; flex-wrap: wrap; }
-    #FireFlyConfigPage .ffc-grip { cursor: grab; opacity: .5; font-size: 1.2em; user-select: none; width: 1em; }
-    #FireFlyConfigPage .ffc-dot { width: .65em; height: .65em; border-radius: 50%; flex: none; background: #777; }
-    #FireFlyConfigPage .ffc-dot.ok { background: #3fb950; } #FireFlyConfigPage .ffc-dot.warn { background: #d29922; } #FireFlyConfigPage .ffc-dot.bad { background: #f85149; }
-    #FireFlyConfigPage .ffc-name { background: none; border: none; color: inherit; font: inherit; font-weight: 500; font-size: 1.02em; cursor: pointer; padding: .2em 0; min-width: 8em; text-align: left; }
-    #FireFlyConfigPage .ffc-badge { font-size: .75em; padding: .05em .55em; border-radius: 4px; border: 1px solid rgba(128,128,128,.4); opacity: .85; }
-    #FireFlyConfigPage .ffc-status { flex: 1 1 12em; font-size: .82em; opacity: .75; }
-    #FireFlyConfigPage .ffc-status.bad { color: #ff8f8f; opacity: 1; }
-    #FireFlyConfigPage .ffc-chips { display: flex; flex-wrap: wrap; gap: .35em; }
-    #FireFlyConfigPage .ffc-chip { border-radius: 999px; padding: .15em .75em; font-size: .82em; cursor: pointer; border: 1px solid rgba(128,128,128,.4); background: none; color: inherit; opacity: .6; font-family: inherit; min-height: 2em; }
+    #FireFlyConfigPage .ffc-row { display: flex; align-items: center; gap: .7em; padding: .6em .8em; flex-wrap: nowrap; overflow-x: auto; }
+    #FireFlyConfigPage .ffc-site-main { display: flex; align-items: center; gap: .7em; flex: 0 0 calc(33.333% - .7em); min-width: 0; }
+    #FireFlyConfigPage .ffc-grip { cursor: grab; opacity: .5; font-size: 1.2em; user-select: none; width: 1em; flex: none; }
+    #FireFlyConfigPage .ffc-name { background: none; border: none; color: inherit; font: inherit; font-weight: 500; font-size: 1.02em; cursor: pointer; padding: .2em 0; min-width: 0; max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; flex: 0 1 auto; }
+    #FireFlyConfigPage .ffc-chips { display: flex; flex-wrap: nowrap; gap: .35em; min-width: 0; flex: 1 1 auto; }
+    #FireFlyConfigPage .ffc-chip { border-radius: 999px; padding: .15em .75em; font-size: .82em; cursor: pointer; border: 1px solid rgba(128,128,128,.4); background: none; color: inherit; opacity: .6; font-family: inherit; min-height: 2em; white-space: nowrap; flex: none; }
+    #FireFlyConfigPage .ffc-row-actions { display: flex; align-items: center; gap: .7em; flex: none; margin-left: auto; }
     #FireFlyConfigPage .ffc-chip.on { opacity: 1; background: rgba(0,164,220,.18); border-color: #00a4dc; }
     #FireFlyConfigPage .ffc-switch { width: 2.9em; height: 1.6em; border-radius: 1em; border: none; background: rgba(128,128,128,.5); position: relative; cursor: pointer; flex: none; }
     #FireFlyConfigPage .ffc-switch::after { content: ''; position: absolute; top: .2em; left: .2em; width: 1.2em; height: 1.2em; border-radius: 50%; background: #fff; transition: left .15s; }
@@ -98,15 +130,15 @@
   <div data-role="content">
     <div class="content-primary">
       <h2>萤火虫 FireFly</h2>
-      <nav class="ffc-nav" aria-label="设置分组">
+      <!-- <nav class="ffc-nav" aria-label="设置分组">
         <a href="#" data-goto="ffcDownload">下载与媒体库</a>
         <a href="#" data-goto="ffcTmdb">元数据（TMDb）</a>
         <a href="#" data-goto="ffcSites">资源站点</a>
         <a href="#" data-goto="ffcKeywords">优选关键词</a>
-      </nav>
+      </nav> -->
       <form id="FireFlyConfigForm">
-        <details class="ffc-group" id="ffcDownload">
-          <summary>下载与媒体库<span class="ffc-sum" id="ffcDownloadSum"></span></summary>
+        <details class="ffc-group" id="ffcDownload" open>
+          <summary class="ffc-group-title">下载与媒体库<span class="ffc-sum" id="ffcDownloadSum"></span></summary>
           <div class="inputContainer">
             <input is="emby-input" type="text" id="ThunderDownloadDir" label="迅雷下载目录" />
             <div class="fieldDescription">留空为 ~/Downloads/FireFly。请在迅雷 → 设置 → 下载目录里设成同一个目录，并关闭"新建任务时弹出确认"。</div>
@@ -121,8 +153,8 @@
           </div>
         </details>
 
-        <details class="ffc-group" id="ffcTmdb">
-          <summary>元数据（TMDb）<span class="ffc-sum" id="ffcTmdbSum"></span></summary>
+        <details class="ffc-group" id="ffcTmdb" open>
+          <summary class="ffc-group-title">元数据（TMDb）<span class="ffc-sum" id="ffcTmdbSum"></span></summary>
           <div class="selectContainer">
             <select is="emby-select" id="TmdbApiBaseSelect" label="TMDb 元数据地址"></select>
             <div class="fieldDescription">插件直连 TMDb，不经过任何中转。默认地址打不开时换一个，或选"自定义"填社区提供的地址。</div>
@@ -152,51 +184,49 @@
             <input is="emby-input" type="text" id="TmdbApiKey" label="TMDb API Key" />
             <div class="fieldDescription">用于"发现"热门榜单，在 themoviedb.org 账号设置里免费申请。只保存在本机。</div>
           </div>
-          <button is="emby-button" type="button" id="ffClearCache" class="raised" style="margin:0 0 1.8em"><span>清除 TMDb 缓存</span></button>
+          <div class="ffc-cache-row">
+            <label class="ffc-cache-toggle">
+              <input is="emby-checkbox" type="checkbox" id="TmdbCacheEnabled" />
+              <span>开启 TMDb 缓存</span>
+            </label>
+            <button type="button" class="ffc-btn ffc-btn-primary" id="ffClearCache">清除缓存</button>
+          </div>
           <div class="checkboxContainer">
             <label>
               <input is="emby-checkbox" type="checkbox" id="ShowTrailers" />
-              <span>详情页显示 YouTube 预告片</span>
+              <span>显示 YouTube 预告片</span>
             </label>
-            <div class="fieldDescription">大陆网络不翻墙时 YouTube 打不开，默认关闭。</div>
           </div>
         </details>
 
-        <details class="ffc-group" id="ffcSites">
-          <summary>资源站点<span class="ffc-sum" id="ffcSitesSum"></span></summary>
+        <details class="ffc-group" id="ffcSites" open>
+          <summary class="ffc-group-title">资源站点<span class="ffc-sum" id="ffcSitesSum"></span></summary>
           <div class="ffc-head">
-            <div class="ffc-desc">越靠前越优先，拖动 ⠿ 调整顺序。</div>
+            <div class="ffc-desc">可为不同类型资源设置不同资源站点，配置多个站点时，拖动 ⠿ 调整顺序，越靠前搜索优先级越高，实际搜索顺序参考搜索计划。部分站点存在人机验证等机制，默认为不支持。</div>
             <button type="button" class="ffc-btn ffc-btn-primary" id="ffcAddSite">＋ 添加站点</button>
           </div>
           <div class="ffc-sites" id="ffcSiteList"></div>
         </details>
 
-        <details class="ffc-group" id="ffcKeywords">
-          <summary>优选关键词<span class="ffc-sum" id="ffcKwSum"></span></summary>
+        <details class="ffc-group" id="ffcKeywords" open>
+          <summary class="ffc-group-title">优选关键词<span class="ffc-sum" id="ffcKwSum"></span></summary>
           <div class="ffc-head">
-            <div class="ffc-desc">标题带这些词的资源排在最前。越靠前越优先，拖动调整；点一个词可限定站点或类型。</div>
-            <button type="button" class="ffc-btn ffc-btn-link" id="ffcResetKw">恢复默认</button>
+            <div class="ffc-desc">拖动 ⠿ 调整顺序，越靠前搜索优先级越高；点击关键词右侧配置小按钮修改站点和类型组合，建议每个站点不超过 5 个。可以配置单个词，也可以配置多个词，多个词之间用空格隔开。</div>
+            <!-- <button type="button" class="ffc-btn ffc-btn-link" id="ffcResetKw">恢复默认</button> -->
           </div>
           <div class="ffc-kws" id="ffcKwList"></div>
           <div id="ffcKwEditor" style="margin-top:.8em"></div>
-          <div class="ffc-note" id="ffcKwCost" style="margin-top:.8em"></div>
           <div style="margin-top:1.2em; padding-top:1em; border-top:1px solid rgba(128,128,128,.25)">
             <div class="ffc-head">
               <div>
                 <div style="font-weight:500">搜索计划</div>
-                <div class="ffc-desc">按当前设置，搜不同类型的影片时会这样请求。</div>
+                <div class="ffc-desc">不同类型影片的搜索优先级，只有当高优先级站点的搜索结果不足时（≤5），才会继续搜索低优先级的站点。</div>
               </div>
               <div class="ffc-tabs" role="tablist" id="ffcPlanTabs"></div>
             </div>
             <div id="ffcPlanWarn"></div>
             <div class="ffc-table" id="ffcPlan"></div>
             <div class="ffc-desc" id="ffcPlanTotal" style="margin-top:.4em"></div>
-            <div style="display:flex; gap:.5em; flex-wrap:wrap; align-items:center; margin-top:.8em">
-              <label for="ffcTryTitle" class="ffc-desc">试一试</label>
-              <input class="ffc-input" id="ffcTryTitle" placeholder="输入片名" style="width:14em" />
-              <button type="button" class="ffc-btn" id="ffcTry">按这个类型搜索</button>
-              <span class="ffc-desc" id="ffcTryResult"></span>
-            </div>
           </div>
         </details>
 
@@ -212,17 +242,16 @@
     (function () {
       var pluginId = '4f1d2c8e-9b7a-4e35-8c61-f1ae0f17f1f1';
       var fields = ['ThunderDownloadDir', 'MovieLibraryPath', 'SeriesLibraryPath', 'TmdbApiKey', 'TmdbLanguage'];
-      var checks = ['ShowTrailers'];
+      var checks = ['TmdbCacheEnabled', 'ShowTrailers'];
       // 下拉选的地址：候选来自规则文件，第一项是默认；选"自定义"时显示输入框
       var bases = [{ key: 'TmdbApiBase', options: 'tmdbApiBases' }, { key: 'TmdbImageBase', options: 'tmdbImageBases' }];
       var CUSTOM = 'custom';
-      var MAX_KEYWORDS = 5;
       var config = null;
       var page = document.querySelector('#FireFlyConfigPage');
       var $ = function (sel) { return page.querySelector(sel); };
 
       // 站点和关键词编辑器的状态：lower = 内置 + rules.json，overlay = 本页的改动（保存进 RulesOverlay）
-      var ed = { lower: { sources: [], keywords: [] }, overlay: {}, categories: [], health: {}, sample: '流浪地球' };
+      var ed = { lower: { sources: [], keywords: [] }, overlay: {}, categories: [], sample: '流浪地球' };
       var ui = { open: null, editingKw: null, planTab: 'movie', dirty: false };
 
       function esc(text) {
@@ -347,33 +376,20 @@
       }
 
       // ---------- 站点列表 ----------
-      function healthOf(s) {
-        var h = ed.health[s.name];
-        if (!s.enabled) return { cls: '', text: '已停用' + (h ? ' · ' + healthText(h) : '') };
-        if (!h) return { cls: '', text: '还没有请求过' };
-        if (!h.ok) return { cls: 'bad', text: healthText(h) };
-        return { cls: h.count ? 'ok' : 'warn', text: healthText(h) };
-      }
-      function healthText(h) {
-        return h.ok ? '上次可用 · ' + (h.ms / 1000).toFixed(1) + ' 秒 · ' + h.count + ' 条' : '上次失败：' + (h.error || '未知原因');
-      }
-
       var dragSite = null;
       function renderSites() {
         var box = $('#ffcSiteList');
         box.innerHTML = '';
         var list = sites();
-        if (!list.length) {
-          box.appendChild(el('div', { class: 'ffc-empty' }, [
-            el('strong', { text: '还没有资源站点' }),
-            el('div', { class: 'ffc-desc', text: '萤火虫不内置任何资源站，添加至少一个站点后才能在详情页获取资源。把资源站的网址粘贴进来，插件会自动识别怎么搜。开了人机验证的站暂时不支持。' }),
-            el('div', { class: 'ffc-actions', style: 'justify-content:center' }, [
-              el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '添加第一个站点', onclick: function () { addSiteDialog(); } }),
-            ]),
-          ]));
-        }
+        // if (!list.length) {
+        //   box.appendChild(el('div', { class: 'ffc-empty' }, [
+        //     el('strong', { text: '还没有资源站点' }),
+        //     el('div', { class: 'ffc-actions', style: 'justify-content:center' }, [
+        //       el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '添加第一个站点', onclick: function () { addSiteDialog(); } }),
+        //     ]),
+        //   ]));
+        // }
         list.forEach(function (s) {
-          var health = healthOf(s);
           var open = ui.open === s.name;
           var row = el('div', { class: 'ffc-site', 'data-name': s.name });
           row.addEventListener('dragover', function (e) { if (dragSite && dragSite !== s.name) { e.preventDefault(); row.classList.add('ffc-drop'); } });
@@ -393,14 +409,16 @@
             return el('button', { type: 'button', class: 'ffc-chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', text: catLabel(key), onclick: function () { toggleType(s, key); } });
           }));
           row.appendChild(el('div', { class: 'ffc-row' }, [
-            grip,
-            el('span', { class: 'ffc-dot ' + health.cls, 'aria-hidden': 'true' }),
-            el('button', { type: 'button', class: 'ffc-name', 'aria-expanded': open ? 'true' : 'false', text: (open ? '▾ ' : '▸ ') + s.name, onclick: function () { ui.open = open ? null : s.name; renderSites(); } }),
-            el('span', { class: 'ffc-badge', text: s.kind === 'torznab' ? 'Torznab · 已不支持' : s.kind === 'html' ? '网页' + (s.builtin ? '' : ' · 自定义') : s.builtin ? (s.modified ? '内置 · 已改' : '内置') : '自定义' }),
-            el('span', { class: 'ffc-status ' + (health.cls === 'bad' ? 'bad' : ''), text: health.text }),
+            el('div', { class: 'ffc-site-main' }, [
+              grip,
+              el('button', { type: 'button', class: 'ffc-name', 'aria-expanded': open ? 'true' : 'false', text: (open ? '▾ ' : '▸ ') + s.name, onclick: function () { ui.open = open ? null : s.name; renderSites(); } }),
+            ]),
             chips,
-            el('button', { type: 'button', class: 'ffc-btn', text: '测试', onclick: function () { testSite(s); } }),
-            el('button', { type: 'button', class: 'ffc-switch' + (s.enabled ? ' on' : ''), 'aria-pressed': s.enabled ? 'true' : 'false', 'aria-label': '启用 ' + s.name, onclick: function () { ovSource(s.name, true).enabled = !s.enabled; markDirty(); renderAll(); } }),
+            el('div', { class: 'ffc-row-actions' }, [
+              el('button', { type: 'button', class: 'ffc-switch' + (s.enabled ? ' on' : ''), 'aria-pressed': s.enabled ? 'true' : 'false', 'aria-label': '启用 ' + s.name, onclick: function () { ovSource(s.name, true).enabled = !s.enabled; markDirty(); renderAll(); } }),
+              el('button', { type: 'button', class: 'ffc-btn', text: '测试', onclick: function () { testSite(s); } }),
+              s.builtin ? null : el('button', { type: 'button', class: 'ffc-btn ffc-btn-danger', text: '删除', 'aria-label': '删除站点 ' + s.name, onclick: function () { deleteSite(s); } }),
+            ]),
           ]));
           if (open) row.appendChild(siteDetail(s));
           box.appendChild(row);
@@ -422,7 +440,7 @@
 
       function siteDetail(s) {
         var box = el('div', { class: 'ffc-detail' });
-        box.appendChild(el('div', { class: 'ffc-desc', text: s.kind === 'html' ? '搜索地址（{keyword} 是搜索词，{page} 是页码；依次尝试）' : '地址（依次尝试，上次成功的自动排到最前）' }));
+        box.appendChild(el('div', { class: 'ffc-desc', text: s.kind === 'html' ? '搜索地址' : '地址（依次尝试，上次成功的自动排到最前）' }));
         var endpoints = s.endpoints.length ? s.endpoints.slice() : [''];
         function save() {
           var values = Array.prototype.map.call(box.querySelectorAll('.ffc-endpoint input'), function (i) { return i.value.trim(); }).filter(Boolean);
@@ -438,30 +456,32 @@
           el('button', { type: 'button', class: 'ffc-btn', text: '＋ 添加备用地址', onclick: function () { save(); ovSource(s.name, true).endpoints = (ovSource(s.name).endpoints || s.endpoints).concat(['']); renderSites(); } }),
         ]);
         if (s.builtin && s.modified) actions.appendChild(el('button', { type: 'button', class: 'ffc-btn ffc-btn-link', text: '恢复默认', onclick: function () { removeOverlaySource(s.name); markDirty(); renderAll(); } }));
-        if (!s.builtin) actions.appendChild(el('button', { type: 'button', class: 'ffc-btn ffc-btn-danger', text: '删除站点', onclick: function () {
-          if (!confirm('删除站点 ' + s.name + '？')) return;
-          removeOverlaySource(s.name);
-          if (ed.overlay.sourceOrder) ed.overlay.sourceOrder = ed.overlay.sourceOrder.filter(function (n) { return !same(n, s.name); });
-          (ovKeywords().items || []).forEach(function (k) { if (k.sources) k.sources = k.sources.filter(function (n) { return !same(n, s.name); }); });
-          ui.open = null; markDirty(); renderAll();
-        } }));
         box.appendChild(actions);
 
         // 本站关键词：和下面"优选关键词"是同一份数据，这里只显示对本站生效的
-        var mine = activeKeywords().filter(function (k) { return applies(k, s.name, null); });
-        var kwBox = el('div', { class: 'ffc-kws' }, mine.map(function (k) {
-          return el('span', { class: 'ffc-badge', text: k.word + (k.sources.length ? ' · 本站' : ' · 通用') + (k.types.length ? ' · ' + k.types.map(catLabel).join('、') : '') });
-        }));
-        var input = el('input', { class: 'ffc-input', placeholder: '添加本站专用词', style: 'width:11em', 'aria-label': '本站专用关键词' });
-        kwBox.appendChild(input);
-        kwBox.appendChild(el('button', { type: 'button', class: 'ffc-btn', text: '＋', 'aria-label': '添加本站专用词', onclick: function () { addKeyword(input.value, [s.name]); } }));
-        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addKeyword(input.value, [s.name]); } });
-        box.appendChild(el('div', { class: 'ffc-desc', text: '本站关键词（和"优选关键词"是同一份数据，这里只显示对本站生效的）' }));
-        box.appendChild(kwBox);
+        // var mine = activeKeywords().filter(function (k) { return applies(k, s.name, null); });
+        // var kwBox = el('div', { class: 'ffc-kws' }, mine.map(function (k) {
+        //   return el('span', { class: 'ffc-badge', text: k.word + (k.sources.length ? ' · 本站' : ' · 通用') + (k.types.length ? ' · ' + k.types.map(catLabel).join('、') : '') });
+        // }));
+        // var input = el('input', { class: 'ffc-input', placeholder: '添加本站专用词', style: 'width:11em', 'aria-label': '本站专用关键词' });
+        // kwBox.appendChild(input);
+        // kwBox.appendChild(el('button', { type: 'button', class: 'ffc-btn', text: '＋', 'aria-label': '添加本站专用词', onclick: function () { addKeyword(input.value, [s.name]); } }));
+        // input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addKeyword(input.value, [s.name]); } });
+        // box.appendChild(el('div', { class: 'ffc-desc', text: '本站生效关键词' }));
+        // box.appendChild(kwBox);
         return box;
       }
 
       function removeOverlaySource(name) { if (ed.overlay.sources) ed.overlay.sources = ed.overlay.sources.filter(function (x) { return !same(x.name, name); }); }
+
+      function deleteSite(site) {
+        if (!confirm('删除站点 ' + site.name + '？')) return;
+        removeOverlaySource(site.name);
+        if (ed.overlay.sourceOrder) ed.overlay.sourceOrder = ed.overlay.sourceOrder.filter(function (n) { return !same(n, site.name); });
+        (ovKeywords().items || []).forEach(function (k) { if (k.sources) k.sources = k.sources.filter(function (n) { return !same(n, site.name); }); });
+        if (ui.editingKw && !keywords().some(function (k) { return k.word === ui.editingKw; })) ui.editingKw = null;
+        ui.open = null; markDirty(); renderAll();
+      }
 
       // ---------- 测试站点 ----------
       function testSite(s) {
@@ -473,7 +493,6 @@
           api('POST', 'FireFly/sources/test', { name: s.name, keyword: input.value, overlay: cleanOverlay() }).then(function (r) {
             result.innerHTML = '';
             result.appendChild(testResult(r));
-            if (r.ok != null) { ed.health[s.name] = { ok: r.ok, ms: r.ms || 0, count: r.count || 0, error: r.error }; renderSites(); }
           }, function () { result.innerHTML = '<div class="ffc-note bad">请求失败</div>'; });
         }
         body.appendChild(el('div', { style: 'display:flex; gap:.5em' }, [input, el('button', { type: 'button', class: 'ffc-btn', text: '重新测试', onclick: run })]));
@@ -506,7 +525,7 @@
         var box = $('#ffcKwList');
         box.innerHTML = '';
         var list = keywords();
-        if (!list.length) box.appendChild(el('div', { class: 'ffc-desc ffc-kw-empty', text: '还没有优选关键词。可以填你信任的发布组或站点名，搜索时优先找带这些词的资源；不填也能正常搜索。' }));
+        // if (!list.length) box.appendChild(el('div', { class: 'ffc-desc ffc-kw-empty', text: '还没有优选关键词。可以填你信任的发布组或站点名，搜索时优先找带这些词的资源；不填也能正常搜索。' }));
         var rank = 0;
         list.forEach(function (k) {
           if (!k.off) rank++;
@@ -540,7 +559,6 @@
         box.appendChild(input);
         box.appendChild(el('button', { type: 'button', class: 'ffc-btn', text: '＋ 添加', onclick: function () { addKeyword(input.value, []); } }));
         renderKeywordEditor();
-        renderCost();
       }
 
       function toggleKeyword(k) {
@@ -556,13 +574,19 @@
         markDirty(); renderAll();
       }
 
-      function addKeyword(word, sourcesScope) {
-        word = (word || '').trim();
-        if (!word) return;
-        if (keywords().some(function (k) { return same(k.word, word); })) { Dashboard.alert('已经有"' + word + '"了'); return; }
+      function addKeyword(words, sourcesScope) {
+        var wanted = String(words || '').split(/\s+/).map(function (w) { return w.trim(); }).filter(Boolean);
+        if (!wanted.length) return;
+        var existing = keywords().map(function (k) { return k.word; });
+        var added = [];
+        wanted.forEach(function (word) {
+          if (existing.some(function (w) { return same(w, word); }) || added.some(function (w) { return same(w, word); })) return;
+          added.push(word);
+        });
+        if (!added.length) { Dashboard.alert('已经有"' + wanted[0] + '"了'); return; }
         var kw = ovKeywords();
-        kw.items = (kw.items || []).concat([{ word: word, sources: sourcesScope, types: [] }]);
-        if (kw.order && kw.order.length) kw.order = kw.order.concat([word]);
+        kw.items = (kw.items || []).concat(added.map(function (word) { return { word: word, sources: sourcesScope, types: [] }; }));
+        if (kw.order && kw.order.length) kw.order = kw.order.concat(added);
         markDirty(); renderAll();
       }
 
@@ -599,15 +623,6 @@
         ]));
       }
 
-      function renderCost() {
-        var active = activeKeywords().length;
-        var heavy = active > MAX_KEYWORDS;
-        var note = $('#ffcKwCost');
-        note.className = 'ffc-note' + (heavy ? ' warn' : '');
-        note.textContent = '当前 ' + active + ' 个词。每个站点每个词搜一轮（剧集每个词两种季号写法各一轮）。' +
-          (heavy ? '词太多容易被站点限流，建议用"适用范围"把词限定到相关的站点或类型。' : '词越多越全，也越慢；建议每个站点不超过 ' + MAX_KEYWORDS + ' 个。');
-      }
-
       // ---------- 搜索计划 ----------
       function renderPlan() {
         var tabs = $('#ffcPlanTabs');
@@ -630,22 +645,21 @@
           total += n;
           table.appendChild(el('div', {}, [
             el('strong', { text: sp.site.name }),
-            el('span', { class: sp.words.length ? '' : 'ffc-desc', text: sp.words.length ? '片名' + (series ? '（第N季 / SNN）' : '') + ' + ' + sp.words.join(' / ') : '没有生效的关键词：跳过优选，只参与降级搜索' }),
-            el('span', { class: 'ffc-desc', text: n ? n + ' 次' : '—' }),
+            el('span', { class: sp.words.length ? '' : 'ffc-desc', text: sp.words.length ? '片名' + (series ? '（第N季 / SNN）' : '') + ' + ' + sp.words.join(' / ') : '片名' }),
+            el('span', { class: 'ffc-desc', text: n ? n + ' 次' : '1 次' }),
           ]));
         });
         $('#ffcPlanTotal').textContent = '优选阶段约 ' + total + ' 次请求；结果不够时再按站点各做一次不带关键词的降级搜索。';
-        $('#ffcTry').textContent = '按"' + catLabel(ui.planTab) + '"搜索';
       }
 
       function renderAll() {
         renderSites();
         renderKeywords();
         renderPlan();
-        var on = sites().filter(function (s) { return s.enabled; }).length;
-        $('#ffcSitesSum').textContent = sites().length ? sites().length + ' 个站点，' + on + ' 个开启' : '还没有站点';
-        var kws = keywords().filter(function (k) { return !k.off; }).length;
-        $('#ffcKwSum').textContent = kws ? kws + ' 个关键词' : '未设置';
+        // var on = sites().filter(function (s) { return s.enabled; }).length;
+        // $('#ffcSitesSum').textContent = sites().length ? sites().length + ' 个站点，' + on + ' 个开启' : '还没有站点';
+        // var kws = keywords().filter(function (k) { return !k.off; }).length;
+        // $('#ffcKwSum').textContent = kws ? kws + ' 个关键词' : '未设置';
       }
 
       // ---------- 弹窗 ----------
@@ -722,8 +736,7 @@
         input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); run(); } });
         box.appendChild(el('div', { class: 'ffc-field' }, [
           el('label', { for: 'ffcDetectUrl', text: '粘贴资源站的网址' }),
-          el('div', { style: 'display:flex; gap:.5em' }, [input, el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '识别', onclick: run })]),
-          el('div', { class: 'ffc-desc', html: '插件会自己找到这个站的搜索框，用<b>"' + esc(ed.sample) + '"</b>试搜一次，学会怎么读结果。认不出来时，可以在站内搜一次，把搜索结果页的地址粘贴进来。开了人机验证的站暂不支持。' }),
+          el('div', { style: 'display:flex; gap:.5em' }, [input, el('button', { type: 'button', class: 'ffc-btn ffc-btn-primary', text: '识别', onclick: run })])
         ]));
         box.appendChild(out);
         return box;
@@ -919,20 +932,20 @@
         return select.selectedIndex === 0 ? '' : select.value;
       }
 
-      function summaries(c) {
-        $('#ffcDownloadSum').textContent = '迅雷下载目录 ' + (c.ThunderDownloadDir || '~/Downloads/FireFly');
-        $('#ffcTmdbSum').textContent = (c.TmdbApiKey ? 'API Key 已填写' : '还没填 API Key') + ' · ' + (c.TmdbLanguage || 'zh-CN');
-      }
+      // function summaries(c) {
+      //   $('#ffcDownloadSum').textContent = '迅雷下载目录 ' + (c.ThunderDownloadDir || '~/Downloads/FireFly');
+      //   $('#ffcTmdbSum').textContent = (c.TmdbApiKey ? 'API Key 已填写' : '还没填 API Key') + ' · ' + (c.TmdbLanguage || 'zh-CN');
+      // }
 
       page.querySelector('#ffClearCache').addEventListener('click', function () {
         var btn = this;
         btn.disabled = true;
         ApiClient.ajax({ url: ApiClient.getUrl('FireFly/cache'), type: 'DELETE' }).then(function () {
-          btn.querySelector('span').textContent = '已清除';
+          btn.textContent = '已清除';
         }, function () {
-          btn.querySelector('span').textContent = '清除失败';
+          btn.textContent = '清除失败';
         }).then(function () {
-          setTimeout(function () { btn.disabled = false; btn.querySelector('span').textContent = '清除 TMDb 缓存'; }, 2000);
+          setTimeout(function () { btn.disabled = false; btn.textContent = '清除缓存'; }, 2000);
         });
       });
 
@@ -946,7 +959,6 @@
           ed.lower = r.lower;
           ed.overlay = r.overlay || {};
           ed.categories = r.categories || [];
-          ed.health = r.health || {};
           ed.sample = r.sample || ed.sample;
           ui.dirty = false;
           $('#ffcDirty').textContent = '保存后立即生效，不需要重启 Jellyfin';
@@ -964,18 +976,6 @@
         });
       });
       $('#ffcAddSite').addEventListener('click', function () { addSiteDialog(); });
-      $('#ffcResetKw').addEventListener('click', function () { delete ed.overlay.keywords; ui.editingKw = null; markDirty(); renderAll(); });
-      $('#ffcTry').addEventListener('click', function () {
-        var title = $('#ffcTryTitle').value.trim();
-        if (!title) return;
-        var out = $('#ffcTryResult');
-        out.textContent = '正在搜索…';
-        api('POST', 'FireFly/keywords/try', { title: title, category: ui.planTab, overlay: cleanOverlay() }).then(function (r) {
-          out.innerHTML = '';
-          out.appendChild(document.createTextNode('优选阶段找到 ' + r.count + ' 条' + (r.perKeyword && r.perKeyword.length ? '：' + r.perKeyword.map(function (k) { return k.word + ' ' + k.count + ' 条'; }).join(' · ') : '') + (r.errors ? '（' + r.errors + ' 个请求失败）' : '')));
-        }, function () { out.textContent = '搜索失败'; });
-      });
-      $('#ffcTryTitle').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#ffcTry').click(); } });
 
       page.addEventListener('pageshow', function () {
         Dashboard.showLoadingMsg();
@@ -988,7 +988,8 @@
           fields.forEach(function (f) { page.querySelector('#' + f).value = c[f] || ''; });
           if (!lang.value) lang.value = 'zh-CN';
           checks.forEach(function (f) { page.querySelector('#' + f).checked = !!c[f]; });
-          summaries(c);
+          page.querySelector('#TmdbCacheEnabled').checked = c.TmdbCacheEnabled !== false;
+          // summaries(c);
           Dashboard.hideLoadingMsg();
           loadBases();
           loadEditor();
@@ -1007,7 +1008,7 @@
           config = c;
           ApiClient.updatePluginConfiguration(pluginId, c).then(function (result) {
             Dashboard.processPluginConfigurationUpdateResult(result);
-            summaries(c);
+            // summaries(c);
             loadBases();
             loadEditor();
           });

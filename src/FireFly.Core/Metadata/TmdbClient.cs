@@ -116,16 +116,20 @@ public sealed class TmdbClient
     private readonly Func<TmdbSettings> _settings;
     private readonly DiskCache? _metadataCache;
     private readonly DiskCache? _imageCache;
+    private readonly Func<bool> _cacheEnabled;
     private readonly ConcurrentDictionary<string, (DateTimeOffset Expires, string Json)> _cache = new();
 
-    /// <summary>metadataCache / imageCache 为空时只用内存缓存、图片不经插件。</summary>
-    public TmdbClient(HttpClient http, Func<TmdbSettings> settings, DiskCache? metadataCache = null, DiskCache? imageCache = null)
+    /// <summary>metadataCache / imageCache 为空时只用内存缓存、图片不经插件。cacheEnabled 为空时视为开启。</summary>
+    public TmdbClient(HttpClient http, Func<TmdbSettings> settings, DiskCache? metadataCache = null, DiskCache? imageCache = null, Func<bool>? cacheEnabled = null)
     {
         _http = http;
         _settings = settings;
         _metadataCache = metadataCache;
         _imageCache = imageCache;
+        _cacheEnabled = cacheEnabled ?? (() => true);
     }
+
+    private bool CacheEnabled => _cacheEnabled();
 
     private string Images => _settings().Images;
 
@@ -339,14 +343,19 @@ public sealed class TmdbClient
             .Select(kv => $"&{kv.Key}={Uri.EscapeDataString(kv.Value)}"));
         var url = $"{settings.Api}{path}?api_key={Uri.EscapeDataString(key)}&language={Uri.EscapeDataString(language)}{extra}";
         var now = DateTimeOffset.UtcNow;
-        if (_cache.TryGetValue(url, out var hit) && hit.Expires > now)
+        var cacheEnabled = CacheEnabled;
+        if (!cacheEnabled)
+        {
+            _cache.Clear();
+        }
+        else if (_cache.TryGetValue(url, out var hit) && hit.Expires > now)
         {
             return hit.Json;
         }
 
         // 落盘缓存的键不含 API Key：换 Key 不影响缓存，缓存文件里也不留 Key
         var diskKey = $"{settings.Api}{path}?language={language}{extra}";
-        if (_metadataCache?.Get(diskKey, ttl) is { } fresh)
+        if (cacheEnabled && _metadataCache?.Get(diskKey, ttl) is { } fresh)
         {
             var cached = Encoding.UTF8.GetString(fresh.Data);
             Remember(url, now + ttl - fresh.Age, cached);
@@ -367,7 +376,7 @@ public sealed class TmdbClient
         catch (Exception ex) when (ex is HttpRequestException { StatusCode: null or >= System.Net.HttpStatusCode.InternalServerError } or TaskCanceledException && !ct.IsCancellationRequested)
         {
             // 连不上或 TMDb 出错时用旧缓存兜底；4xx（Key 错、条目不存在）照常报错
-            if (_metadataCache?.Get(diskKey, StaleLimit) is { } stale)
+            if (cacheEnabled && _metadataCache?.Get(diskKey, StaleLimit) is { } stale)
             {
                 return Encoding.UTF8.GetString(stale.Data);
             }
@@ -375,8 +384,11 @@ public sealed class TmdbClient
             throw;
         }
 
-        Remember(url, now + ttl, json);
-        _metadataCache?.Set(diskKey, Encoding.UTF8.GetBytes(json));
+        if (cacheEnabled)
+        {
+            Remember(url, now + ttl, json);
+            _metadataCache?.Set(diskKey, Encoding.UTF8.GetBytes(json));
+        }
         return json;
     }
 
@@ -403,7 +415,8 @@ public sealed class TmdbClient
 
         var type = ContentType(file);
         var key = size + "/" + file;
-        if (_imageCache?.Get(key) is { } hit)
+        var cacheEnabled = CacheEnabled;
+        if (cacheEnabled && _imageCache?.Get(key) is { } hit)
         {
             return (hit.Data, type);
         }
@@ -415,7 +428,10 @@ public sealed class TmdbClient
         }
 
         var data = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-        _imageCache?.Set(key, data);
+        if (cacheEnabled)
+        {
+            _imageCache?.Set(key, data);
+        }
         return (data, type);
     }
 

@@ -23,8 +23,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>TMDb 图片地址，同上；空 = 第一个候选（image.tmdb.org）。图片由插件取回并缓存。</summary>
     public string TmdbImageBase { get; set; } = string.Empty;
 
-    /// <summary>详情页是否显示 YouTube 预告片。大陆网络不翻墙时 YouTube 打不开，默认关闭。</summary>
-    public bool ShowTrailers { get; set; }
+    /// <summary>是否使用 TMDb 元数据和图片缓存，默认开启。关闭后每次请求都直达 TMDb。</summary>
+    public bool TmdbCacheEnabled { get; set; } = true;
+
+    /// <summary>详情页是否显示 YouTube 预告片。默认开启；大陆网络不翻墙时可以在配置页关闭。</summary>
+    public bool ShowTrailers { get; set; } = true;
 
     /// <summary>旧版配置页的发布者关键词（一行一个）。启动时迁移进 RulesOverlay 后清空。</summary>
     public string PublisherKeywords { get; set; } = string.Empty;

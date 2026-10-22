@@ -51,7 +51,8 @@ public sealed class FireFlyRuntime
             Pick(Config.TmdbApiBase, Rules.Tmdb.ApiBases),
             Pick(Config.TmdbImageBase, Rules.Tmdb.ImageBases)),
             MetadataCache,
-            ImageCache);
+            ImageCache,
+            () => Config.TmdbCacheEnabled);
         App = new FireFlyApp(Tasks, Downloader);
         Watcher = new DownloadWatcher(Tasks, Downloader, new Archiver(host, () => Rules));
     }

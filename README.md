@@ -90,10 +90,10 @@ cd out/repo && python3 -m http.server 8765         # 保持这个终端开着
 | 迅雷下载目录 | 留空为 `~/Downloads/FireFly`。提交前会写入迅雷并用于扫描进度；迅雷里也建议设成同一目录 |
 | 电影库目录 / 剧集库目录 | 留空时自动使用 Jellyfin 第一个"电影"/"节目"媒体库。最好与下载目录在同一块磁盘，入库时就是瞬间完成的移动；不在同一块磁盘时会变成复制 |
 | TMDb 元数据地址 / 图片地址 | 下拉选择，默认 `api.tmdb.org` 和 `image.tmdb.org`（中国大陆可直连）；插件直连 TMDb，不经过中转。默认地址打不开时换一个候选，或选"自定义"。候选列表在规则文件的 `tmdb.apiBases` / `tmdb.imageBases` 里 |
-| TMDb 缓存 | 元数据缓存在数据目录的 `cache/tmdb`（上限 50 MB，重启不丢；连不上 TMDb 时用 30 天内的旧数据兜底），海报由插件取回缓存在 `cache/images`（上限 500 MB，按最近使用淘汰），浏览器只从 Jellyfin 加载图片。TMDb API Key 下方的按钮可以一键清除 |
+| TMDb 缓存 | 默认开启。元数据缓存在数据目录的 `cache/tmdb`（上限 50 MB，重启不丢；连不上 TMDb 时用 30 天内的旧数据兜底），海报由插件取回缓存在 `cache/images`（上限 500 MB，按最近使用淘汰），浏览器只从 Jellyfin 加载图片。开关可关闭缓存，"清除缓存"按钮可以一键清除 |
 | TMDb 语言 | 下拉选择，默认简体中文（zh-CN），决定片名、简介等元数据的语言 |
 | TMDb API Key | 用于热门榜单和资源详情页，在 themoviedb.org 账号设置 → API 里免费申请 |
-| 详情页显示 YouTube 预告片 | 默认关闭；大陆网络不翻墙时 YouTube 打不开 |
+| 详情页显示 YouTube 预告片 | 默认开启；大陆网络不翻墙时可以在配置页关闭 |
 | 发布者关键词 | 留空使用内置默认（高清剧集网、高清影视之家：前者发剧集、后者发电影；DDHDTV 等各分站的发布名都带这两个词），一行一个词 |
 
 插件的数据目录是 `~/Library/Application Support/jellyfin/plugins/FireFly.Jellyfin`（Jellyfin.app 的默认位置），下文的"数据目录"都指这里。

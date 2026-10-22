@@ -944,6 +944,43 @@ public class CacheTests
     }
 
     [Fact]
+    public async Task CacheSwitchDisablesMetadataAndImageCaches()
+    {
+        using var dir = new TempDir();
+        var handler = new Counting();
+        var enabled = false;
+        var metadata = new DiskCache(System.IO.Path.Combine(dir.Path, "tmdb"), ".json", 1024 * 1024);
+        var images = new DiskCache(System.IO.Path.Combine(dir.Path, "images"), ".img", 1024 * 1024);
+        var client = new TmdbClient(
+            new HttpClient(handler),
+            () => new TmdbSettings("key", "zh-CN", ImageBase: "https://img.example.com/t/p"),
+            metadata,
+            images,
+            () => enabled);
+
+        await client.TrendingAsync(MediaKind.Movie, default);
+        await client.TrendingAsync(MediaKind.Movie, default);
+        Assert.Equal(2, handler.Calls);
+        Assert.Equal(0, metadata.SizeBytes());
+
+        await client.GetImageAsync("w342", "abc.jpg", default);
+        await client.GetImageAsync("w342", "abc.jpg", default);
+        Assert.Equal(4, handler.Calls);
+        Assert.Equal(0, images.SizeBytes());
+
+        enabled = true;
+        await client.TrendingAsync(MediaKind.Movie, default);
+        await client.TrendingAsync(MediaKind.Movie, default);
+        Assert.Equal(5, handler.Calls);
+        Assert.True(metadata.SizeBytes() > 0);
+
+        await client.GetImageAsync("w342", "abc.jpg", default);
+        await client.GetImageAsync("w342", "abc.jpg", default);
+        Assert.Equal(6, handler.Calls);
+        Assert.True(images.SizeBytes() > 0);
+    }
+
+    [Fact]
     public async Task ImagesAreFetchedOnceAndOnlyTmdbPathsAreAccepted()
     {
         using var dir = new TempDir();
