@@ -13,7 +13,7 @@ namespace FireFly.Core.Tests;
 
 public class ReleaseParserTests
 {
-    private const string Uhd = "【高清影视之家发布 www.HDBTHD.com】一战再战[HDR+杜比视界双版本][国英多音轨+特效中文字幕].2025.USA.V2.Bluray.2160p.TrueHD7.1.DoVi.HDR10.x265.10bit-DreamHD";
+    private const string Uhd = "【关键词2发布 www.KEYWORD7.com】一战再战[HDR+杜比视界双版本][国英多音轨+特效中文字幕].2025.USA.V2.Bluray.2160p.TrueHD7.1.DoVi.HDR10.x265.10bit-DreamHD";
 
     [Fact]
     public void ParsesRealUhdTitle()
@@ -25,13 +25,13 @@ public class ReleaseParserTests
         Assert.Equal("BluRay", t.MediaSource);
         Assert.Equal("TrueHD", t.Audio);
         Assert.Equal(2025, t.Year);
-        Assert.Equal("HDBTHD", t.Publisher);
+        Assert.Equal("KEYWORD7", t.Publisher);
         Assert.Equal("国英多音轨+特效中文字幕", t.Subtitles);
         Assert.Null(t.Season);
     }
 
     [Theory]
-    [InlineData("【高清剧集网发布 www.DDHDTV.com】王冠 第二季[全10集][简繁英字幕].2017.1080p.NF.WEB-DL.DDP5.1.H264", 2)]
+    [InlineData("【关键词1发布 www.KEYWORD3.com】王冠 第二季[全10集][简繁英字幕].2017.1080p.NF.WEB-DL.DDP5.1.H264", 2)]
     [InlineData("The.Crown.S02.1080p.BluRay.x264", 2)]
     [InlineData("The.Crown.S01E05.1080p.WEB-DL", 1)]
     [InlineData("Rick and Morty Season 3 1080p", 3)]
@@ -56,10 +56,10 @@ public class ReleaseParserTests
     public void ParsesChineseNumbers(string raw, int expected) => Assert.Equal(expected, ReleaseParser.ChineseNumber(raw));
 
     [Fact]
-    public void ParsesDdhdtvPublisherAnd1080p()
+    public void ParsesKeyword3PublisherAnd1080p()
     {
-        var t = ReleaseParser.Parse("【高清剧集网发布 www.DDHDTV.com】苦尽柑来遇见你[全16集][中文字幕].2025.1080p.NF.WEB-DL.H264.DDP2.0-ZeroTV");
-        Assert.Equal("DDHDTV", t.Publisher);
+        var t = ReleaseParser.Parse("【关键词1发布 www.KEYWORD3.com】苦尽柑来遇见你[全16集][中文字幕].2025.1080p.NF.WEB-DL.H264.DDP2.0-ZeroTV");
+        Assert.Equal("KEYWORD3", t.Publisher);
         Assert.Equal(1080, t.Resolution);
         Assert.Equal("WEB-DL", t.MediaSource);
         Assert.Equal("H.264", t.Codec);
@@ -107,21 +107,21 @@ public class SearchServiceTests
         var source = new FakeSource(k => k == "奥本海默"
             ? new[] { R("A1", "奥本海默.2023.2160p.BluRay.x265", ("Oppenheimer.mkv", 40 * Gb)) }
             : Array.Empty<Release>());
-        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "DDHDTV", "高清剧集网" });
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "KEYWORD3", "关键词1" });
 
         var result = await service.SearchAsync(new MediaQuery { Kind = MediaKind.Movie, Title = "奥本海默", Year = 2023 }, false, default);
 
-        Assert.Equal(new[] { "奥本海默 DDHDTV", "奥本海默 高清剧集网", "奥本海默" }, source.Asked);
+        Assert.Equal(new[] { "奥本海默 KEYWORD3", "奥本海默 关键词1", "奥本海默" }, source.Asked);
         Assert.Single(result.Releases);
     }
 
     [Fact]
     public async Task TriesOriginalTitleWithPublisherBeforeFallingBack()
     {
-        var full = R("H3", "【高清剧集网发布 www.DDHDTV.com】龙之家族.第三季[全08集].House.of.the.Dragon.S03.2160p",
+        var full = R("H3", "【关键词1发布 www.KEYWORD3.com】龙之家族.第三季[全08集].House.of.the.Dragon.S03.2160p",
             ("House.of.the.Dragon.S03E01.mkv", 5 * Gb), ("House.of.the.Dragon.S03E02.mkv", 5 * Gb));
-        var source = new FakeSource(k => k == "House of the Dragon DDHDTV" ? new[] { full } : Array.Empty<Release>());
-        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "DDHDTV", "高清剧集网" });
+        var source = new FakeSource(k => k == "House of the Dragon KEYWORD3" ? new[] { full } : Array.Empty<Release>());
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "KEYWORD3", "关键词1" });
         var query = new MediaQuery
         {
             Kind = MediaKind.Series, Title = "权力的游戏前传：龙族", OriginalTitle = "House of the Dragon",
@@ -132,7 +132,7 @@ public class SearchServiceTests
 
         // 冒号换成空格；剧集按 不带季号 / 第三季 / S03 三种写法搜
         Assert.Equal(
-            new[] { "权力的游戏前传 龙族 DDHDTV", "权力的游戏前传 龙族 第三季 DDHDTV", "权力的游戏前传 龙族 S03 DDHDTV", "权力的游戏前传 龙族 高清剧集网", "权力的游戏前传 龙族 第三季 高清剧集网", "权力的游戏前传 龙族 S03 高清剧集网" },
+            new[] { "权力的游戏前传 龙族 KEYWORD3", "权力的游戏前传 龙族 第三季 KEYWORD3", "权力的游戏前传 龙族 S03 KEYWORD3", "权力的游戏前传 龙族 关键词1", "权力的游戏前传 龙族 第三季 关键词1", "权力的游戏前传 龙族 S03 关键词1" },
             source.Asked.Take(6));
         Assert.Contains("House of the Dragon S03", source.Asked);
         Assert.Contains("House of the Dragon 第三季", source.Asked);
@@ -145,10 +145,10 @@ public class SearchServiceTests
         var full = R("F1", "权力的游戏.第四季[全10集].Game.of.Thrones.S04.2160p",
             ("Game.of.Thrones.S04E01.mkv", 5 * Gb), ("Game.of.Thrones.S04E02.mkv", 5 * Gb));
         var single = R("S1", "权力的游戏.Game.of.Thrones.S04E01.1080p", ("Game.of.Thrones.S04E01.mkv", 3 * Gb));
-        var source = new FakeSource(k => k == "权力的游戏 DDHDTV" ? new[] { full }
+        var source = new FakeSource(k => k == "权力的游戏 KEYWORD3" ? new[] { full }
             : k == "权力的游戏 S04" ? new[] { single }
             : Array.Empty<Release>());
-        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "DDHDTV", "高清剧集网" });
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "KEYWORD3", "关键词1" });
         var query = new MediaQuery
         {
             Kind = MediaKind.Series, Title = "权力的游戏", OriginalTitle = "Game of Thrones", Year = 2011, Season = 4,
@@ -167,10 +167,10 @@ public class SearchServiceTests
         var full = R("F2", "权力的游戏.第四季[全10集].Game.of.Thrones.S04.2160p",
             ("Game.of.Thrones.S04E01.mkv", 5 * Gb), ("Game.of.Thrones.S04E02.mkv", 5 * Gb));
         var single = R("S2", "权力的游戏.Game.of.Thrones.S04E01.1080p", ("Game.of.Thrones.S04E01.mkv", 3 * Gb));
-        var source = new FakeSource(k => k == "权力的游戏 DDHDTV" ? new[] { full }
-            : k == "权力的游戏 S04 DDHDTV" ? new[] { single }
+        var source = new FakeSource(k => k == "权力的游戏 KEYWORD3" ? new[] { full }
+            : k == "权力的游戏 S04 KEYWORD3" ? new[] { single }
             : Array.Empty<Release>());
-        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "DDHDTV", "高清剧集网" });
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "KEYWORD3", "关键词1" });
         var query = new MediaQuery
         {
             Kind = MediaKind.Series, Title = "权力的游戏", OriginalTitle = "Game of Thrones", Year = 2011, Season = 4,
@@ -178,7 +178,7 @@ public class SearchServiceTests
 
         var result = await service.SearchAsync(query, false, default);
 
-        var premiumIndex = source.Asked.IndexOf("权力的游戏 S04 DDHDTV");
+        var premiumIndex = source.Asked.IndexOf("权力的游戏 S04 KEYWORD3");
         var bareIndex = source.Asked.IndexOf("权力的游戏 S04");
         Assert.True(premiumIndex >= 0);
         Assert.True(bareIndex < 0 || premiumIndex < bareIndex);
@@ -194,11 +194,11 @@ public class SearchServiceTests
         var single = R("S3", "权力的游戏.Game.of.Thrones.S04E01.1080p", ("Game.of.Thrones.S04E01.mkv", 3 * Gb));
         var multi = Enumerable.Range(1, 5).Select(i => R($"M{i}", "权力的游戏.Game.of.Thrones.S04E01-E02.1080p",
             ("Game.of.Thrones.S04E01.mkv", 3 * Gb), ("Game.of.Thrones.S04E02.mkv", 3 * Gb))).ToList();
-        var source = new FakeSource(k => k == "权力的游戏 DDHDTV" ? new[] { full }
-            : k == "权力的游戏 S04 DDHDTV" ? new[] { single }
+        var source = new FakeSource(k => k == "权力的游戏 KEYWORD3" ? new[] { full }
+            : k == "权力的游戏 S04 KEYWORD3" ? new[] { single }
             : k == "权力的游戏 S04" ? multi
             : Array.Empty<Release>());
-        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "DDHDTV", "高清剧集网" });
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "KEYWORD3", "关键词1" });
         var query = new MediaQuery
         {
             Kind = MediaKind.Series, Title = "权力的游戏", OriginalTitle = "Game of Thrones", Year = 2011, Season = 4,
@@ -240,10 +240,10 @@ public class SearchServiceTests
     [Fact]
     public async Task PreferredStageReturnsFirstThenFallbackAppends()
     {
-        var pref = R("P1", "【高清剧集网发布 www.BPHDTV.com】黑帮领地[第10集].MobLand.S01.2160p", ("MobLand.S01E10.mkv", 3 * Gb));
+        var pref = R("P1", "【关键词1发布 www.KEYWORD4.com】黑帮领地[第10集].MobLand.S01.2160p", ("MobLand.S01E10.mkv", 3 * Gb));
         var bare = R("B1", "MobLand.S01E09.1080p.WEB", ("MobLand.S01E09.mkv", 2 * Gb));
-        var source = new FakeSource(k => k == "MobLand 第一季 高清剧集网" ? new[] { pref } : k == "MobLand S01" ? new[] { bare } : Array.Empty<Release>());
-        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "高清剧集网" });
+        var source = new FakeSource(k => k == "MobLand 第一季 关键词1" ? new[] { pref } : k == "MobLand S01" ? new[] { bare } : Array.Empty<Release>());
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "关键词1" });
         var query = new MediaQuery { Kind = MediaKind.Series, Title = "MobLand", Year = 2025, Season = 1 };
 
         var first = await service.SearchAsync(query, false, SearchStage.Preferred, default);
@@ -256,7 +256,7 @@ public class SearchServiceTests
         Assert.False(second.NeedsFallback);
         Assert.Equal(new[] { "P1", "B1" }, second.Releases.Select(r => r.InfoHash));
         // 降级阶段接着优选结果做，不重搜优选关键词
-        Assert.DoesNotContain(source.Asked.Skip(asked), k => k.Contains("高清剧集网"));
+        Assert.DoesNotContain(source.Asked.Skip(asked), k => k.Contains("关键词1"));
 
         var cached = await service.SearchAsync(query, false, SearchStage.Preferred, default);
         Assert.True(cached.FromCache);
@@ -268,12 +268,12 @@ public class SearchServiceTests
     public async Task SearchesTitleWithColonReplacedBySpace()
     {
         var movie = R("C1", "沙丘：第二部.2024.2160p.BluRay", ("Dune.Part.Two.mkv", 40 * Gb));
-        var source = new FakeSource(k => k == "沙丘 第二部 DDHDTV" ? new[] { movie } : Array.Empty<Release>());
-        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "DDHDTV", "高清剧集网" });
+        var source = new FakeSource(k => k == "沙丘 第二部 KEYWORD3" ? new[] { movie } : Array.Empty<Release>());
+        var service = new SearchService(() => new[] { source }, () => Rules, () => new[] { "KEYWORD3", "关键词1" });
 
         var result = await service.SearchAsync(new MediaQuery { Kind = MediaKind.Movie, Title = "沙丘：第二部", Year = 2024 }, false, default);
 
-        Assert.Contains("沙丘 第二部 DDHDTV", source.Asked);
+        Assert.Contains("沙丘 第二部 KEYWORD3", source.Asked);
         Assert.DoesNotContain(source.Asked, k => k.Contains('：'));
         Assert.Equal(new[] { "C1" }, result.Releases.Select(r => r.InfoHash));
     }
@@ -330,7 +330,7 @@ public class SearchServiceTests
 
         var havens = new MediaQuery { Kind = MediaKind.Series, Title = "降世神通：七净土", OriginalTitle = "Avatar: Seven Havens", Season = 1 };
         Assert.True(SearchService.NameMentions("降世神通.七净土S01E04.1080p", havens));
-        Assert.True(SearchService.NameMentions("www.UIndex.org    -    Avatar Seven Havens S01E04 1080p", havens));
+        Assert.True(SearchService.NameMentions("www.Site3.org    -    Avatar Seven Havens S01E04 1080p", havens));
 
         var below = new MediaQuery { Kind = MediaKind.Series, Title = "暗潮之下", OriginalTitle = "Below", Season = 1 };
         Assert.False(SearchService.NameMentions("Belowground.S01.1080p", below));
@@ -370,24 +370,24 @@ public class SearchServiceTests
         var ordered = SearchService.Order(new[]
         {
             R("A", "x 2160p", ("a.mkv", Gb)),
-            R("BB", "【高清剧集网发布 www.DDHDTV.com】x 1080p", ("a.mkv", Gb)),
+            R("BB", "【关键词1发布 www.KEYWORD3.com】x 1080p", ("a.mkv", Gb)),
             R("CCC", "x 2160p newer", ("a.mkv", Gb)),
-        }, new[] { "DDHDTV" });
+        }, new[] { "KEYWORD3" });
         Assert.Equal(new[] { "BB", "CCC", "A" }, ordered.Select(r => r.InfoHash));
     }
 
-    // 发布版不内置站点；这份是社区常用的 diao.im 规则，只用来测 jsonApi 的字段映射
-    private static SourceRule DiaoRule() => RulesLoader.Parse("""
-        {"sources":[{"name": "diao.im", "kind": "jsonApi", "endpoints": ["https://m.diao.im/api/search"], "pageSize": 10, "maxPages": 5, "enabled": true, "types": [], "request": {"keywordParam": "keyword", "limitParam": "limit", "offsetParam": "offset", "maxLimit": 10}, "response": {"statusPath": "status", "statusOk": "200", "messagePath": "message", "itemsPath": "data.torrents", "hasMorePath": "data.has_more", "fields": {"infoHash": "hash", "name": "name", "magnet": "magnet_uri", "size": "size", "createdAt": "created_at", "createdAtFormat": "unix", "files": "files", "filePath": "path", "fileSize": "size"}}}]}
+    // 发布版不内置站点；这份是社区常用的 site1.example 规则，只用来测 jsonApi 的字段映射
+    private static SourceRule Site1Rule() => RulesLoader.Parse("""
+        {"sources":[{"name": "site1.example", "kind": "jsonApi", "endpoints": ["https://m.site1.example/api/search"], "pageSize": 10, "maxPages": 5, "enabled": true, "types": [], "request": {"keywordParam": "keyword", "limitParam": "limit", "offsetParam": "offset", "maxLimit": 10}, "response": {"statusPath": "status", "statusOk": "200", "messagePath": "message", "itemsPath": "data.torrents", "hasMorePath": "data.has_more", "fields": {"infoHash": "hash", "name": "name", "magnet": "magnet_uri", "size": "size", "createdAt": "created_at", "createdAtFormat": "unix", "files": "files", "filePath": "path", "fileSize": "size"}}}]}
         """).Sources.Single();
 
     [Fact]
-    public void JsonApiRuleMapsDiaoResponseToReleases()
+    public void JsonApiRuleMapsSite1ResponseToReleases()
     {
-        var rule = DiaoRule();
+        var rule = Site1Rule();
         using var doc = System.Text.Json.JsonDocument.Parse("""
             {"status":200,"message":"success","data":{"has_more":true,"torrents":[
-              {"hash":"abcdef","name":"【高清剧集网发布 www.DDHDTV.com】测试.2024.1080p","size":123,"magnet_uri":"","created_at":1787365846,
+              {"hash":"abcdef","name":"【关键词1发布 www.KEYWORD3.com】测试.2024.1080p","size":123,"magnet_uri":"","created_at":1787365846,
                "files":[{"path":"dir/a.mkv","size":100}]},
               {"hash":"","name":"没有 hash 的条目会被丢掉"}]}}
             """);
@@ -400,15 +400,15 @@ public class SearchServiceTests
         Assert.Equal("magnet:?xt=urn:btih:ABCDEF", release.Magnet);
         Assert.Equal(123, release.SizeBytes);
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1_787_365_846), release.CreatedAt);
-        Assert.Equal("DDHDTV", release.Traits.Publisher);
-        Assert.Equal("diao.im", release.Source);
+        Assert.Equal("KEYWORD3", release.Traits.Publisher);
+        Assert.Equal("site1.example", release.Source);
         Assert.Equal(new ReleaseFile("dir/a.mkv", 100), Assert.Single(release.Files));
     }
 
     [Fact]
     public void JsonApiRuleRejectsBadStatus()
     {
-        var rule = DiaoRule();
+        var rule = Site1Rule();
         using var doc = System.Text.Json.JsonDocument.Parse("""{"status":500,"message":"busy"}""");
         var ex = Assert.Throws<SourceException>(() => JsonApiSource.ParsePage(rule, doc.RootElement, out _));
         Assert.Contains("busy", ex.Message);
@@ -486,7 +486,7 @@ public class RulesTests
         Assert.Equal(new[] { "甲", "乙" }, newer.PublisherKeywords);
         Assert.Contains(newer.Warnings, w => w.Contains("格式版本 2"));
 
-        var legacy = RulesLoader.Merge(Base, """{"version":2,"sources":[{"name":"a","kind":"diao"}]}""");
+        var legacy = RulesLoader.Merge(Base, """{"version":2,"sources":[{"name":"a","kind":"legacy"}]}""");
         Assert.False(legacy.HasOverride);
         Assert.Equal("jsonApi", legacy.Sources[0].Kind);
         Assert.Contains(legacy.Warnings, w => w.Contains("旧版规则"));
@@ -601,8 +601,8 @@ public class DownloadTests
     public void ProbeByNameIgnoresExtraSpacesFromHtmlTitle()
     {
         using var dir = new TempDir();
-        var video = dir.File(System.IO.Path.Combine("【高清剧集网发布 www.PTHDTV.com】超能路人甲[全8集].S01", "e1.mkv"), 100 * Mb);
-        var release = Movie with { Files = Array.Empty<ReleaseFile>(), SizeBytes = 100 * Mb, Name = "【高清剧集网 发布 www.PTHDTV.com】超能路人甲 [全8集].S01" };
+        var video = dir.File(System.IO.Path.Combine("【关键词1发布 www.KEYWORD6.com】超能路人甲[全8集].S01", "e1.mkv"), 100 * Mb);
+        var release = Movie with { Files = Array.Empty<ReleaseFile>(), SizeBytes = 100 * Mb, Name = "【关键词1 发布 www.KEYWORD6.com】超能路人甲 [全8集].S01" };
         Assert.True(MacThunderDownloader.ProbeByReleaseName(release, new[] { new FileInfo(video) }, Rules).Complete);
     }
 
@@ -1189,8 +1189,8 @@ public class ReleaseDisplayTests
         new() { InfoHash = "H", Name = name, Magnet = "magnet:?xt=urn:btih:H&dn=" + Uri.EscapeDataString(name) + "&tr=udp%3A%2F%2Ft", Traits = new ReleaseTraits { Resolution = res, MediaSource = source } };
 
     [Theory]
-    [InlineData("【高清剧集网发布 www.BTHDTV.com】牵牛和仙女[全12集][简繁英字幕].Head.Over.Heels.S01.2025.1080p", "牵牛和仙女 S01 全12集")]
-    [InlineData("【高清剧集网发布 www.BPHDTV.com】牵牛和仙女[第08-10集][简繁英字幕].Head.Over.Heels.S01", "牵牛和仙女 S01 第08-10集")]
+    [InlineData("【关键词1发布 www.KEYWORD5.com】牵牛和仙女[全12集][简繁英字幕].Head.Over.Heels.S01.2025.1080p", "牵牛和仙女 S01 全12集")]
+    [InlineData("【关键词1发布 www.KEYWORD4.com】牵牛和仙女[第08-10集][简繁英字幕].Head.Over.Heels.S01", "牵牛和仙女 S01 第08-10集")]
     [InlineData("Head.Over.Heels.S01E05-E08.1080p", "牵牛和仙女 S01 第05-08集")]
     [InlineData("牵牛和仙女 第3集 www.xx.com", "牵牛和仙女 S01 第03集")]
     [InlineData("牵牛和仙女.1080p", "牵牛和仙女 S01")]
@@ -1204,13 +1204,13 @@ public class ReleaseDisplayTests
     public void MovieNameAndMagnetDn()
     {
         var query = new MediaQuery { Kind = MediaKind.Movie, Title = "沙丘", Year = 2021 };
-        var rel = Rel("沙丘.6v电影 地址发布页 www.6v123.com", 2160) with { Traits = new ReleaseTraits { Resolution = 2160, Hdr = "HDR" } };
+        var rel = Rel("沙丘.站点2 地址发布页 www.site2.com", 2160) with { Traits = new ReleaseTraits { Resolution = 2160, Hdr = "HDR" } };
         var name = ReleaseDisplay.Name(query, rel);
         Assert.Equal("沙丘 (2021)", name);
 
         var magnet = ReleaseDisplay.WithDisplayName(rel.Magnet, name);
         Assert.Equal("magnet:?xt=urn:btih:H&dn=" + Uri.EscapeDataString(name) + "&tr=udp%3A%2F%2Ft", magnet);
-        Assert.DoesNotContain("6v123", magnet);
+        Assert.DoesNotContain("site2", magnet);
         Assert.Equal("magnet:?xt=urn:btih:X&dn=a", ReleaseDisplay.WithDisplayName("magnet:?xt=urn:btih:X", "a"));
     }
 }
@@ -1237,7 +1237,7 @@ public class EpisodeCoverageTests
         Assert.False(range.FullSeason);
         Assert.Equal(new[] { 8, 9, 10 }, range.Episodes);
 
-        var single = ReleaseDisplay.Coverage(R("【高清剧集网发布 www.DDHDTV.com】龙之家族.第三季[第08集].House.of.the.Dragon.S03.2160p", "House.of.the.Dragon.S03E08.Episode.8.2160p.mkv"), Rules);
+        var single = ReleaseDisplay.Coverage(R("【关键词1发布 www.KEYWORD3.com】龙之家族.第三季[第08集].House.of.the.Dragon.S03.2160p", "House.of.the.Dragon.S03E08.Episode.8.2160p.mkv"), Rules);
         Assert.False(single.FullSeason);
         Assert.Equal((8, 8), (single.From, single.To));
 

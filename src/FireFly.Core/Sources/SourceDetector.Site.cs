@@ -1,6 +1,6 @@
 namespace FireFly.Core.Sources;
 
-/// <summary>只粘贴了站点地址（如 https://m.diao.im）时，先找到这个站怎么搜，再按搜索结果页识别。</summary>
+/// <summary>只粘贴了站点地址（如 https://example.com）时，先找到这个站怎么搜，再按搜索结果页识别。</summary>
 public sealed partial class SourceDetector
 {
     /// <summary>首页没有搜索框时试的常见搜索地址；{0} 是 URL 编码后的样例片名。</summary>

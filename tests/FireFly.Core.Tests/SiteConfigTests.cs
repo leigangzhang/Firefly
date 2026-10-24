@@ -82,17 +82,17 @@ public class SiteConfigTests
     {
         using var dir = new TempDir();
         var file = Path.Combine(dir.Path, "rules.json");
-        File.WriteAllText(file, """{"sources":[{"name":"diao.im","kind":"jsonApi","endpoints":["https://from-file/api"],"response":{"itemsPath":"data"}}],"keywords":{"items":["高清剧集网"]}}""");
-        var rules = RulesLoader.Load(file, """{"sources":[{"name":"diao.im","types":["movie"]}],"keywords":{"items":["新词"]}}""");
-        var diao = rules.Sources.Single(s => s.Name == "diao.im");
-        Assert.Equal(new[] { "https://from-file/api" }, diao.Endpoints);
-        Assert.Equal(new[] { "movie" }, diao.Types);
+        File.WriteAllText(file, """{"sources":[{"name":"site1.example","kind":"jsonApi","endpoints":["https://from-file/api"],"response":{"itemsPath":"data"}}],"keywords":{"items":["关键词1"]}}""");
+        var rules = RulesLoader.Load(file, """{"sources":[{"name":"site1.example","types":["movie"]}],"keywords":{"items":["新词"]}}""");
+        var site1 = rules.Sources.Single(s => s.Name == "site1.example");
+        Assert.Equal(new[] { "https://from-file/api" }, site1.Endpoints);
+        Assert.Equal(new[] { "movie" }, site1.Types);
         Assert.Contains(rules.EffectiveKeywords(), k => k.Word == "新词");
-        Assert.Contains(rules.EffectiveKeywords(), k => k.Word == "高清剧集网");
+        Assert.Contains(rules.EffectiveKeywords(), k => k.Word == "关键词1");
 
         var broken = RulesLoader.Load(file, "{not json");
         Assert.Contains(broken.Warnings, w => w.Contains("配置页"));
-        Assert.Equal(new[] { "https://from-file/api" }, broken.Sources.Single(s => s.Name == "diao.im").Endpoints);
+        Assert.Equal(new[] { "https://from-file/api" }, broken.Sources.Single(s => s.Name == "site1.example").Endpoints);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public class SiteConfigTests
     }
 
     [Fact]
-    public void AutoMapRecognisesDiaoStyleResponse()
+    public void AutoMapRecognisesSite1StyleResponse()
     {
         const string json = """
             {"status":200,"message":"ok","data":{"has_more":true,"torrents":[
@@ -269,12 +269,12 @@ public class SiteConfigTests
     [Fact]
     public void DetectorFindsKeywordParamAndGuessesApiPaths()
     {
-        var page = new Uri("https://m.diao.im/search?keyword=%E6%B5%81%E6%B5%AA%E5%9C%B0%E7%90%83&page=1");
+        var page = new Uri("https://m.site1.example/search?keyword=%E6%B5%81%E6%B5%AA%E5%9C%B0%E7%90%83&page=1");
         var query = SourceDetector.ParseQuery(page.Query);
         Assert.Equal("keyword", SourceDetector.FindKeywordParam(query, null));
         var guesses = SourceDetector.GuessUrls(page, "keyword", "流浪地球").Select(u => u.AbsolutePath).ToList();
         Assert.Equal("/api/search", guesses[0]);
-        Assert.True(SourceDetector.SameSite("https://m.diao.im/api/search", new Uri("https://www.diao.im/x")));
+        Assert.True(SourceDetector.SameSite("https://m.site1.example/api/search", new Uri("https://www.site1.example/x")));
 
         var paths = SourceDetector.ExtractApiPaths("""fetch("/api/user/info");axios.get('/api/torrents/search',{});var u="https://x.example/api/search/";""").ToList();
         Assert.Equal("/api/torrents/search", paths[0]);
@@ -303,9 +303,9 @@ public class SiteConfigTests
     [Fact]
     public void OldKeywordTextBoxMigratesToAddDisableOrder()
     {
-        var overlay = KeywordMigration.Overlay("""{"sources":[{"name":"a","enabled":false}]}""", new[] { "新词", "高清剧集网" }, Array.Empty<string>());
+        var overlay = KeywordMigration.Overlay("""{"sources":[{"name":"a","enabled":false}]}""", new[] { "新词", "关键词1" }, Array.Empty<string>());
         var rules = RulesLoader.Load(null, overlay);
-        Assert.Equal(new[] { "新词", "高清剧集网" }, rules.EffectiveKeywords().Select(k => k.Word));
+        Assert.Equal(new[] { "新词", "关键词1" }, rules.EffectiveKeywords().Select(k => k.Word));
         Assert.Contains("\"enabled\":false", overlay);
     }
 

@@ -87,7 +87,7 @@ public class HtmlSiteTests
             """);
         Assert.Equal(2, MiniHtml.QueryAll(doc, "div#m p").Count);
         Assert.Equal("two bold", MiniHtml.QueryAll(doc, "p")[1].Text);
-        Assert.Equal("【高清剧集网发布】超能路人甲[全8集]", MiniHtml.Parse("<a>【高清剧集网<span>发布</span>】<em>超能路人甲</em>[全8集]</a>").Elements.First().Text);
+        Assert.Equal("【关键词1发布】超能路人甲[全8集]", MiniHtml.Parse("<a>【关键词1<span>发布</span>】<em>超能路人甲</em>[全8集]</a>").Elements.First().Text);
         Assert.Equal("bold", MiniHtml.Value(doc, "div.a.b > p b"));
         Assert.Equal(2, MiniHtml.QueryAll(doc, "ul > li").Count);
         Assert.Equal("y", MiniHtml.Value(doc, "li.y"));
@@ -201,7 +201,7 @@ public class HtmlSiteTests
         Assert.DoesNotContain(pages.Asked, u => u.AbsolutePath == "/d/3");
     }
 
-    /// <summary>标题不在链接里、搜索词被 &lt;b&gt; 切开、链接是个空 &lt;a&gt;（类似 cilisousuo）。</summary>
+    /// <summary>标题不在链接里、搜索词被 &lt;b&gt; 切开、链接是个空 &lt;a&gt;（类似 站点4）。</summary>
     private const string SplitTitlePage = """
         <html><body><ul class="list">
           <li class="item"><a class="link" href="/magnet/a1"></a><div class="result-title"><b>流浪</b><b>地球</b>.2019.1080p</div><div class="size">2.1 GB</div></li>
@@ -275,12 +275,12 @@ public class HtmlSiteTests
     {
         const string xml = """
             <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
-              <Url type="application/x-suggestions+json" template="https://m.diao.im/suggest?q={searchTerms}"/>
-              <Url type="text/html" template="https://m.diao.im/search?keyword={searchTerms}&amp;p={startPage?}"/>
+              <Url type="application/x-suggestions+json" template="https://m.site1.example/suggest?q={searchTerms}"/>
+              <Url type="text/html" template="https://m.site1.example/search?keyword={searchTerms}&amp;p={startPage?}"/>
             </OpenSearchDescription>
             """;
-        Assert.Equal("https://m.diao.im/search?keyword=%E6%B5%81%E6%B5%AA%E5%9C%B0%E7%90%83&p=", SourceDetector.OpenSearchTemplate(xml, new Uri("https://m.diao.im/"), "流浪地球")!.AbsoluteUri);
-        Assert.Null(SourceDetector.OpenSearchTemplate("not xml", new Uri("https://m.diao.im/"), "a"));
+        Assert.Equal("https://m.site1.example/search?keyword=%E6%B5%81%E6%B5%AA%E5%9C%B0%E7%90%83&p=", SourceDetector.OpenSearchTemplate(xml, new Uri("https://m.site1.example/"), "流浪地球")!.AbsoluteUri);
+        Assert.Null(SourceDetector.OpenSearchTemplate("not xml", new Uri("https://m.site1.example/"), "a"));
         const string plain = """<OpenSearchDescription><Url type="text/html" template="http://share.x.test/topics/list?keyword={searchTerms}"/></OpenSearchDescription>""";
         Assert.Equal("https://share.x.test/topics/list?keyword=a", SourceDetector.OpenSearchTemplate(plain, new Uri("https://share.x.test/"), "a")!.AbsoluteUri);
     }

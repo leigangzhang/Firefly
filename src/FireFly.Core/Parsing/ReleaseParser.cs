@@ -89,7 +89,7 @@ public static partial class ReleaseParser
         return m.Success ? int.Parse(m.Groups[1].Value) : null;
     }
 
-    /// <summary>【高清剧集网发布 www.DDHDTV.com】→ DDHDTV；没有网址时取"发布"前的名字。</summary>
+    /// <summary>【关键词1发布 www.KEYWORD3.com】→ KEYWORD3；没有网址时取"发布"前的名字。</summary>
     public static string? ParsePublisher(string text)
     {
         var m = PublisherRegex().Match(text);

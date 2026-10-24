@@ -725,7 +725,7 @@
       // 粘贴站点地址（或一次搜索的结果页地址），插件自动识别
       function paneDetect() {
         var box = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
-        var input = el('input', { class: 'ffc-input', id: 'ffcDetectUrl', placeholder: 'https://m.diao.im', style: 'flex:1' });
+        var input = el('input', { class: 'ffc-input', id: 'ffcDetectUrl', placeholder: 'https://example.com', style: 'flex:1' });
         var out = el('div', { style: 'display:flex; flex-direction:column; gap:.9em' });
         function run() {
           if (!input.value.trim()) return;
