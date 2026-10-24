@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # 生成 Jellyfin 插件库：out/repo/manifest.json + 插件包。
-# 用法：./make-repo.sh <插件库对外地址>
-#   本机试装：./make-repo.sh http://127.0.0.1:8765 && (cd out/repo && python3 -m http.server 8765)
+# 用法：scripts/make-repo.sh <插件库对外地址>
+#   本机试装：scripts/make-repo.sh http://127.0.0.1:8765 && (cd out/repo && python3 -m http.server 8765)
 #            然后在 Jellyfin 控制台 → 插件 → 存储库 添加 http://127.0.0.1:8765/manifest.json
-#   正式发布：./make-repo.sh https://你的域名/firefly ，把 out/repo 下的文件上传到该地址（M3）
+#   正式发布：scripts/make-repo.sh https://你的域名/firefly ，把 out/repo 下的文件上传到该地址（M3）
 set -euo pipefail
-cd "$(dirname "$0")"
-BASE_URL="${1:?用法：./make-repo.sh <插件库对外地址>}"
+cd "$(dirname "$0")/.."
+BASE_URL="${1:?用法：scripts/make-repo.sh <插件库对外地址>}"
 BASE_URL="${BASE_URL%/}"
 
-./build.sh
+scripts/build.sh
 VERSION=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)
 ZIP="FireFly_$VERSION.zip"
 mkdir -p out/repo

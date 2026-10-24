@@ -2,7 +2,7 @@
 # 构建 FireFly 插件并打成 Jellyfin 插件包：out/FireFly_<版本>.zip
 # 需要 .NET 9 SDK（macOS：brew install dotnet@9）。
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 VERSION=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)
 TARGET_ABI="10.11.11.0"
