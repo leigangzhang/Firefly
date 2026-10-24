@@ -44,7 +44,7 @@ export PATH="$(brew --prefix dotnet@9)/bin:$PATH"
 
 ```bash
 cd ~/Workspace/FireFly
-dotnet test tests/FireFly.Core.Tests -f net9.0     # 单元测试，应全部通过
+dotnet test tests/FireFly.Core.Tests -p:TargetFrameworks=net9.0   # 单元测试，应全部通过（测试项目同时面向 net10.0，只装了 .NET 9 SDK 时要这样限定）
 ./build.sh                                         # 生成 out/FireFly_<版本>.zip
 ```
 
